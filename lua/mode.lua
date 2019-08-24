@@ -40,23 +40,12 @@ function Task:wait()
   return self.completed:wait()
 end
 
--- Vim API
-
--- Test
-
-local capabilities = {
-  textDocument = {
-    publishDiagnostics={relatedInformation=true},
-  },
-  offsetEncoding = {'utf-8', 'utf-16'},
-}
-
 local function find_closest(curr, fname)
-  local stat, err = uv._uv.fs_stat((curr / fname).string)
+  local stat, _ = uv._uv.fs_stat((curr / fname).string)
   if stat ~= nil then
     return curr
   else
-    local next = path.parent(cur)
+    local next = path.parent(curr)
     if next == nil then
       return nil
     else
@@ -65,19 +54,79 @@ local function find_closest(curr, fname)
   end
 end
 
--- Quickfix
+-- Signs
 
-local Quickfix = {}
+local Signs = util.Object:extend()
 
-function Quickfix.set(list)
-  vim.call.setqflist(list, 'r')
+function Signs:init(o)
+  self.name = o.name
+  local res = vim.call.sign_define(self.name, {
+    text = o.text,
+    texthl = o.texthl,
+    linehl = o.linehl,
+    numhl = o.numhl,
+  })
+  assert(res == 0, 'Signs.init: unable to define sign')
+end
+
+function Signs:place(sign)
+  local res = vim.call.sign_place(
+    0, self.name, self.name, sign.expr, {lnum = sign.lnum}
+  )
+  assert(res ~= -1, 'Signs.place: unable to place sign')
+end
+
+function Signs:unplace_all()
+  local res = vim.call.sign_unplace(self.name)
+  assert(res == 0, 'Signs.unplace_all: Unable to unplace all signs')
+end
+
+-- Diagnostics
+
+local Diagnostics = {
+  use_quickfix_list = true,
+  use_signs = Signs:new({
+    name = 'mode-diag',
+    text = '✖',
+    texthl = 'Error',
+  }),
+  items = {}
+}
+
+function Diagnostics:set(items)
+  self.items = items
+  if self.use_quickfix_list then
+    vim.call.setqflist(items, 'r')
+  end
+  if self.use_signs then
+    self.use_signs:unplace_all()
+    for _, item in ipairs(items) do
+      self.use_signs:place({expr = item.filename, lnum = item.lnum})
+    end
+  end
 end
 
 -- LSP
 
 local LSP = {
-  _by_root = {}
+  _by_root = {},
+
+  capabilities = {
+    textDocument = {
+      publishDiagnostics = true,
+    },
+    offsetEncoding = {'utf-8', 'utf-16'},
+  },
 }
+
+function LSP.uri_of_path(p)
+  return "file://" .. p.string
+end
+
+function LSP.uri_to_path(uri)
+  -- strips file:// prefix
+  return P(string.sub(uri, 8))
+end
 
 function LSP:start(id, root, config)
   -- check if we have client running for the id
@@ -91,29 +140,43 @@ function LSP:start(id, root, config)
     args = config.args
   })
 
-  self._by_root[id] = {
-    shutdown = function()
-      proc:shutdown()
-    end
-  }
-
-  local client = jsonrpc.JSONRPCClient:new({
+  local jsonrpc_client = jsonrpc.JSONRPCClient:new({
     stream_input = proc.stdout,
     stream_output = proc.stdin
   })
 
-  client.notifications:subscribe(function(notif)
-    vim.show(notif)
+  self._by_root[id] = {
+    shutdown = function()
+      proc:shutdown()
+      jsonrpc_client:stop()
+    end
+  }
+
+  jsonrpc_client.notifications:subscribe(function(notif)
+    if notif.method == 'textDocument/publishDiagnostics' then
+      local filename = self.uri_to_path(notif.params.uri)
+      local items = {}
+      for _, diag in ipairs(notif.params.diagnostics) do
+        table.insert(items, {
+          filename = filename.string,
+	        lnum = diag.range.start.line + 1,
+	        col = diag.range.start.character + 1,
+	        text = diag.message,
+	        type = 'E',
+	      })
+      end
+      Diagnostics:set(items)
+    else
+      vim.show(notif)
+    end
   end)
 
   Task:new(function()
-    local initialized = client:request("initialize", {
+    jsonrpc_client:request("initialize", {
       processId = uv._uv.getpid(),
-      rootUri = 'file://' .. root.string,
-      capabilities = capabilities,
+      rootUri = self.uri_of_path(root),
+      capabilities = self.capabilities,
     }):wait()
-
-    vim.show(initialized)
   end)
 end
 
@@ -124,7 +187,7 @@ function LSP:shutdown(id)
 end
 
 function LSP:shutdown_all()
-  for _idx, client in pairs(self._by_root) do
+  for _, client in pairs(self._by_root) do
     client.shutdown()
   end
 end
@@ -144,8 +207,12 @@ vim.autocommand.register {
   action = function()
     local config = flow_config
     local filename = P(vim.call.expand("%:p"))
+
     local root = config.find_root(filename)
-    assert(root, 'Unable to find root')
+    if not root then
+      return
+    end
+
     local id = root.string
     LSP:start(id, root, config)
   end

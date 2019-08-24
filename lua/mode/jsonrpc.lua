@@ -1,3 +1,4 @@
+-- luacheck: globals vim
 -- JSON RPC
 
 local util = require 'mode.util'
@@ -13,6 +14,7 @@ function JSONRPCClient:init(o)
   self.notifications = async.Channel:new()
   self.callbacks = {}
   self.request_id = 0
+  self.read_stop = nil
   self:start()
 end
 
@@ -41,7 +43,7 @@ function JSONRPCClient:start()
     end
   end
 
-  self.stream_input:read_start(on_stdout)
+  self.read_stop = self.stream_input:read_start(on_stdout)
 end
 
 function JSONRPCClient:on_message(data)
@@ -90,6 +92,12 @@ function JSONRPCClient:request(method, params)
   self:send(request)
 
   return response
+end
+
+function JSONRPCClient:stop()
+  self.notifications:close()
+  self.read_stop()
+  self.callbacks = nil
 end
 
 return {

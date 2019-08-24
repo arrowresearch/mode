@@ -1,8 +1,25 @@
+-- luacheck: globals vim
 --
 -- High level wrapper around neovim Lua API.
 --
 
 local util = require 'mode.util'
+
+-- Wait for VIM API to be available.
+--
+-- This assumes that if no coroutine is running then it's safe to call into vim.
+
+local function wait()
+  if not vim.in_fast_event() then
+    return
+  end
+  local running = coroutine.running()
+  assert(running, 'Should be called from a coroutine')
+  vim.schedule(function()
+    assert(coroutine.resume(running))
+  end)
+  coroutine.yield()
+end
 
 -- Proxy for convenient calls to vim functions.
 --
@@ -12,10 +29,9 @@ local util = require 'mode.util'
 --   local filename = vim.call.expand("%:p")
 
 local call_meta = {
-  __index = function(t, k)
+  __index = function(_, k)
     return function(...)
       local args = util.table_pack(...)
-      wait()
       return vim.api.nvim_call_function(k, args)
     end
   end
@@ -28,7 +44,7 @@ setmetatable(call, call_meta)
 -- Execute vim commands.
 --
 
-function execute(cmd, ...)
+local function execute(cmd, ...)
   vim.api.nvim_command(string.format(cmd, ...))
 end
 
@@ -38,12 +54,6 @@ end
 
 local _autocommand_callback = {}
 local _autocommand_id = 0
-
-function _autocommand_gen_event(name)
-  return function(pattern)
-    return string.format([[%s %s]], name, pattern)
-  end
-end
 
 local _autocommand_events = {
   'BufNewFile',
@@ -158,8 +168,14 @@ local _autocommand_events = {
 
 local autocommand = {}
 
-for _idx, name in ipairs(_autocommand_events) do
+for _, name in ipairs(_autocommand_events) do
   autocommand[name] = name
+end
+
+local function autocommand_destroy(id)
+  local group = "_lua_group_" .. tostring(id)
+  execute([[autocmd! %s]], group, id)
+  _autocommand_callback[id] = nil
 end
 
 function autocommand.register(o)
@@ -193,28 +209,6 @@ function autocommand._trigger(id)
   local cb = _autocommand_callback[id]
   assert(cb ~= nil, 'Unknown autocommand id')
   cb()
-end
-
-function autocommand_destroy(id)
-  local group = "_lua_group_" .. tostring(id)
-  execute([[autocmd! %s]], group, event, id)
-  _autocommand_callback[id] = nil
-end
-
--- Wait for VIM API to be available.
---
--- This assumes that if no coroutine is running then it's safe to call into vim.
-
-function wait()
-  if not vim.in_fast_event() then
-    return
-  end
-  local running = coroutine.running()
-  assert(running, 'Should be called from a coroutine')
-  vim.schedule(function()
-    assert(coroutine.resume(running))
-  end)
-  coroutine.yield()
 end
 
 local function show(o)
