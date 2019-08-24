@@ -65,7 +65,7 @@ local function find_nearest(curr, fname)
   end
 end
 
-Task:new(function()
+function startLSP()
   local proc = uv.Process:new({
     cmd = './node_modules/.bin/flow',
     args = {'lsp'}
@@ -80,18 +80,37 @@ Task:new(function()
     vim.show(notif)
   end)
 
-  local fname = P(vim.call.expand("%:p"))
-  local flowconfig = find_nearest(fname.parent, '.flowconfig')
+  Task:new(function()
+    local fname = P(vim.call.expand("%:p"))
+    local flowconfig = find_nearest(fname.parent, '.flowconfig')
 
-  vim.show(flowconfig.string)
+    vim.show(flowconfig.string)
 
-  local initialized = client:request("initialize", {
-    processId = uv._uv.getpid(),
-    rootUri = 'file://' .. flowconfig.string,
-    capabilities = capabilities,
-  }):wait()
+    local initialized = client:request("initialize", {
+      processId = uv._uv.getpid(),
+      rootUri = 'file://' .. flowconfig.string,
+      capabilities = capabilities,
+    }):wait()
 
-  vim.show(initialized)
-end).completed:subscribe(function()
-  -- vim.api.nvim_command('DONE')
-end)
+    vim.show(initialized)
+  end)
+
+  return function()
+    proc:shutdown()
+  end
+end
+
+vim.autocommand.register {
+  event = {vim.autocommand.BufRead, vim.autocommand.BufNewFile},
+  pattern = '*.js',
+  action = function()
+    local shutdownLSP = startLSP()
+    vim.autocommand.register {
+      event = vim.autocommand.VimLeavePre,
+      pattern = '*',
+      action = function()
+        shutdownLSP()
+      end
+    }
+  end
+}

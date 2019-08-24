@@ -95,6 +95,14 @@ function Future:wait()
   end
 end
 
+function Future:map(f)
+  local next = Future:new()
+  self:subscribe(function(result)
+    next:put(f(result))
+  end)
+  return next
+end
+
 return {
   Channel = Channel,
   Future = Future,

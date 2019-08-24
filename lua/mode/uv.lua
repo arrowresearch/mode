@@ -59,6 +59,14 @@ function Stream:close()
   end
 end
 
+function Stream:shutdown()
+  local resp = async.Future:new()
+  uv.shutdown(self.handle, function()
+    resp:put(nil)
+  end)
+  return resp
+end
+
 -- Pipe
 
 local Pipe = Stream:extend()
@@ -94,7 +102,6 @@ function Process:spawn()
     stdio = { self.stdin.handle, self.stdout.handle, self.stderr.handle },
     args = self.args,
   }, function(exit_code, _)
-    self:close()
     self.exit_code:put(exit_code)
   end)
   assert(handle, "Unable to spawn a process")
@@ -102,15 +109,14 @@ function Process:spawn()
   self.pid = pid
 end
 
-function Process:close()
-  if self.handle then
-    if not uv.is_closing(self.handle) then
-      uv.close(self.handle)
-    end
-    self.stdin:close()
+function Process:shutdown()
+  assert(self.handle ~= nil, 'Process.shutdown: handle is nil')
+  self.stdin:shutdown():map(function()
     self.stdout:close()
     self.stderr:close()
-  end
+    self.stdin:close()
+    uv.close(self.handle)
+  end)
 end
 
 function Process:kill(signal)
