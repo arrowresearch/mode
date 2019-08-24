@@ -87,9 +87,9 @@ function Process:init(o)
   self.pid = nil
   self.handle = nil
   self.exit_code = async.Future:new()
-  self.stdin = Pipe:new()
-  self.stdout = Pipe:new()
-  self.stderr = Pipe:new()
+  self.stdin = o.stdin or Pipe:new()
+  self.stdout = o.stdout or Pipe:new()
+  self.stderr = o.stderr or Pipe:new()
   self:spawn()
 end
 

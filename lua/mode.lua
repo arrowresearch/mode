@@ -45,7 +45,7 @@ local function find_closest(curr, fname)
   if stat ~= nil then
     return curr
   else
-    local next = path.parent(curr)
+    local next = curr.parent
     if next == nil then
       return nil
     else

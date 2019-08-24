@@ -216,6 +216,46 @@ local function show(o)
   print(vim.inspect(o))
 end
 
+local callback = {
+  _id = 0,
+  _registry = {},
+}
+
+function callback.wrap(f)
+  callback._id = callback._id + 1
+  local id = 'cb__' .. tostring(callback._id)
+  callback._registry[id] = function()
+    callback._registry[id] = nil
+    f()
+  end
+  return id
+end
+
+function callback.execute(id)
+  local cb = callback._registry[id]
+  assert(cb, 'No callback found')
+  cb()
+end
+
+execute [[
+function Mode_lua_callback(id, ...)
+  exec "lua require('mode.vim').callback.execute('".a:id."')"
+endfunction
+]]
+
+local function termopen(o)
+  assert(o.cmd)
+  assert(o.on_exit)
+  local cb = callback.wrap(function()
+    vim.schedule(function()
+      o.on_exit()
+    end)
+  end)
+  execute([[
+    call termopen('%s', {'on_exit': function('Mode_lua_callback', ['%s'])})
+  ]], o.cmd, cb)
+end
+
 return {
   _vim = vim,
   call = call,
@@ -223,4 +263,6 @@ return {
   wait = wait,
   show = show,
   autocommand = autocommand,
+  termopen = termopen,
+  callback = callback
 }

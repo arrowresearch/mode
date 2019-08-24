@@ -59,7 +59,7 @@ end
 -- table.pack which works in older Lua
 
 local NIL = {}
-function table_pack(...)
+local function table_pack(...)
   local n = select('#', ...)
   local t = {...}
   for i = 1,n do
