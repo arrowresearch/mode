@@ -25,10 +25,10 @@ local call = {}
 setmetatable(call, call_meta)
 
 --
--- Running commands with string interpolation.
+-- Execute vim commands.
 --
 
-function _execute(cmd, ...)
+function execute(cmd, ...)
   vim.api.nvim_command(string.format(cmd, ...))
 end
 
@@ -178,8 +178,8 @@ function autocommand.register(o)
   _autocommand_id = _autocommand_id + 1
   local id = _autocommand_id
   local group = "_lua_group_" .. tostring(id)
-  _execute([[augroup %s]], group)
-  _execute(
+  execute([[augroup %s]], group)
+  execute(
     [[autocmd %s %s :lua require('mode.vim').autocommand._trigger(%i)]],
     group, eventstring, id
   )
@@ -197,7 +197,7 @@ end
 
 function autocommand_destroy(id)
   local group = "_lua_group_" .. tostring(id)
-  _execute([[autocmd! %s]], group, event, id)
+  execute([[autocmd! %s]], group, event, id)
   _autocommand_callback[id] = nil
 end
 
@@ -225,6 +225,7 @@ end
 return {
   _vim = vim,
   call = call,
+  execute = execute,
   wait = wait,
   show = show,
   autocommand = autocommand,

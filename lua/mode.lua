@@ -65,21 +65,37 @@ local function find_closest(curr, fname)
   end
 end
 
+-- Quickfix
+
+local Quickfix = {}
+
+function Quickfix.set(list)
+  vim.call.setqflist(list, 'r')
+end
+
+-- LSP
+
 local LSP = {
   _by_root = {}
 }
 
-function LSP:start(id)
-  -- check if we have client running for the root
+function LSP:start(id, root, config)
+  -- check if we have client running for the id
   local client = self._by_root[id]
   if client then
     return
   end
 
   local proc = uv.Process:new({
-    cmd = './node_modules/.bin/flow',
-    args = {'lsp'}
+    cmd = config.cmd,
+    args = config.args
   })
+
+  self._by_root[id] = {
+    shutdown = function()
+      proc:shutdown()
+    end
+  }
 
   local client = jsonrpc.JSONRPCClient:new({
     stream_input = proc.stdout,
@@ -93,18 +109,12 @@ function LSP:start(id)
   Task:new(function()
     local initialized = client:request("initialize", {
       processId = uv._uv.getpid(),
-      rootUri = 'file://' .. id,
+      rootUri = 'file://' .. root.string,
       capabilities = capabilities,
     }):wait()
 
     vim.show(initialized)
   end)
-
-  self._by_root[id] = {
-    shutdown = function()
-      proc:shutdown()
-    end
-  }
 end
 
 function LSP:shutdown(id)
@@ -113,19 +123,38 @@ function LSP:shutdown(id)
   client.shutdown()
 end
 
+function LSP:shutdown_all()
+  for _idx, client in pairs(self._by_root) do
+    client.shutdown()
+  end
+end
+
+-- An example config for flow
+local flow_config = {
+  cmd = './node_modules/.bin/flow',
+  args = {'lsp'},
+  find_root = function(filename)
+    return find_closest(filename.parent, '.flowconfig')
+  end
+}
+
 vim.autocommand.register {
   event = {vim.autocommand.BufRead, vim.autocommand.BufNewFile},
   pattern = '*.js',
   action = function()
+    local config = flow_config
     local filename = P(vim.call.expand("%:p"))
-    local root = find_closest(filename.parent, '.flowconfig').string
-    LSP:start(root)
-    vim.autocommand.register {
-      event = vim.autocommand.VimLeavePre,
-      pattern = '*',
-      action = function()
-        LSP:shutdown(root)
-      end
-    }
+    local root = config.find_root(filename)
+    assert(root, 'Unable to find root')
+    local id = root.string
+    LSP:start(id, root, config)
+  end
+}
+
+vim.autocommand.register {
+  event = vim.autocommand.VimLeavePre,
+  pattern = '*',
+  action = function()
+    LSP:shutdown_all()
   end
 }
