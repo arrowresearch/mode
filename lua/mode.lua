@@ -51,7 +51,7 @@ local capabilities = {
   offsetEncoding = {'utf-8', 'utf-16'},
 }
 
-local function find_nearest(curr, fname)
+local function find_closest(curr, fname)
   local stat, err = uv._uv.fs_stat((curr / fname).string)
   if stat ~= nil then
     return curr
@@ -60,12 +60,22 @@ local function find_nearest(curr, fname)
     if next == nil then
       return nil
     else
-      return find_nearest(next, fname)
+      return find_closest(next, fname)
     end
   end
 end
 
-function startLSP()
+local LSP = {
+  _by_root = {}
+}
+
+function LSP:start(id)
+  -- check if we have client running for the root
+  local client = self._by_root[id]
+  if client then
+    return
+  end
+
   local proc = uv.Process:new({
     cmd = './node_modules/.bin/flow',
     args = {'lsp'}
@@ -81,35 +91,40 @@ function startLSP()
   end)
 
   Task:new(function()
-    local fname = P(vim.call.expand("%:p"))
-    local flowconfig = find_nearest(fname.parent, '.flowconfig')
-
-    vim.show(flowconfig.string)
-
     local initialized = client:request("initialize", {
       processId = uv._uv.getpid(),
-      rootUri = 'file://' .. flowconfig.string,
+      rootUri = 'file://' .. id,
       capabilities = capabilities,
     }):wait()
 
     vim.show(initialized)
   end)
 
-  return function()
-    proc:shutdown()
-  end
+  self._by_root[id] = {
+    shutdown = function()
+      proc:shutdown()
+    end
+  }
+end
+
+function LSP:shutdown(id)
+  local client = self._by_root[id]
+  assert(client, 'LSP.shutdown: unable to find server')
+  client.shutdown()
 end
 
 vim.autocommand.register {
   event = {vim.autocommand.BufRead, vim.autocommand.BufNewFile},
   pattern = '*.js',
   action = function()
-    local shutdownLSP = startLSP()
+    local filename = P(vim.call.expand("%:p"))
+    local root = find_closest(filename.parent, '.flowconfig').string
+    LSP:start(root)
     vim.autocommand.register {
       event = vim.autocommand.VimLeavePre,
       pattern = '*',
       action = function()
-        shutdownLSP()
+        LSP:shutdown(root)
       end
     }
   end

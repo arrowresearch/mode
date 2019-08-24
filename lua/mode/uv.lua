@@ -10,10 +10,6 @@ local async = require 'mode.async'
 
 local Stream = util.Object:extend()
 
-function Stream:init()
-  self.closed = false
-end
-
 function Stream:write(data)
   local status = async.Future:new()
   uv.write(self.handle, data, function(err)
@@ -23,7 +19,7 @@ function Stream:write(data)
 end
 
 function Stream:read_start(f)
-  assert(not self.closed, 'Stream is closed')
+  assert(self.handle, 'Stream.read_start: no handle')
   uv.read_start(self.handle, function(err, chunk)
     if err then
       assert(not err, err)
@@ -39,7 +35,7 @@ function Stream:read_start(f)
 end
 
 function Stream:read_all()
-  assert(not self.closed, 'Stream is closed')
+  assert(self.handle, 'Stream.read_all: no handle')
   local data = async.Future:new()
   local chunks = {}
   self:read_start(function(chunk)
@@ -53,10 +49,11 @@ function Stream:read_all()
 end
 
 function Stream:close()
-  if not uv.is_closing(self.handle) then
-    self.closed = true
-    uv.close(self.handle)
+  if not self.handle then
+    return
   end
+  uv.close(self.handle)
+  self.handle = nil
 end
 
 function Stream:shutdown()
