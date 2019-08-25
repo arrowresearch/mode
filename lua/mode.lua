@@ -39,7 +39,8 @@ end
 
 function Signs:place(sign)
   local res = vim.call.sign_place(
-    0, self.name, self.name, sign.expr, {lnum = sign.lnum}
+    0, self.name, self.name, sign.expr,
+    {lnum = sign.lnum, priority = sign.priority or 100}
   )
   assert(res ~= -1, 'Signs.place: unable to place sign')
 end
@@ -111,8 +112,10 @@ end
 local LSPClient = util.Object:extend()
 
 function LSPClient:init(o)
+  self.seen = false
   self.jsonrpc = o.jsonrpc
   self.root = o.root
+  self.languageId = o.languageId
   self.is_insert_mode = false
   self.is_utf8 = nil
   self.capabilities = {
@@ -156,7 +159,11 @@ function LSPClient:init(o)
 end
 
 function LSPClient:did_open(bufnr)
+  if self.seen then return end
+  self.seen = true
+  vim.show('did')
   self.initialized:wait()
+  vim.show('open')
   local uri = LSP.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr)))
   local lines = vim._vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
   local text = table.concat(lines, "\n")
@@ -168,7 +175,7 @@ function LSPClient:did_open(bufnr)
       uri = uri,
       text = text,
       version = vim._vim.api.nvim_buf_get_changedtick(bufnr),
-      -- languageId = luvlsp.config.lsp_languageId
+      languageId = self.languageId,
     }
   })
   vim._vim.api.nvim_buf_attach(bufnr, false, {
@@ -178,7 +185,9 @@ function LSPClient:did_open(bufnr)
 end
 
 function LSPClient:did_change(_, bufnr, tick, start, stop, stopped, bytes, _, units)
+  vim.show('did')
   self.initialized:wait()
+  vim.show('change')
   local lines = vim._vim.api.nvim_buf_get_lines(bufnr, start, stopped, true)
   local text = table.concat(lines, "\n") .. ((stopped > start) and "\n" or "")
   local length = (self.is_utf8 and bytes) or units
@@ -216,12 +225,19 @@ function LSPClient:did_insert_leave(_)
 end
 
 function LSPClient:shutdown()
-  self.jsonrpc:request("shutdown", nil):wait()
+  self.jsonrpc:request("shutdown", nil)
   self.jsonrpc:notify("exit", nil)
   self.jsonrpc:stop()
 end
 
-function LSP:get(id, root, config)
+function LSP:get(id)
+  local lsp = self._by_root[id]
+  if lsp then
+    return lsp.client
+  end
+end
+
+function LSP:start(id, root, config)
   -- check if we have client running for the id
   local lsp = self._by_root[id]
   if lsp then
@@ -235,11 +251,14 @@ function LSP:get(id, root, config)
 
   local client = LSPClient:new({
     root = root,
+    languageId = config.languageId,
     jsonrpc = jsonrpc.JSONRPCClient:new({
       stream_input = proc.stdout,
       stream_output = proc.stdin
     })
   })
+
+  vim.show("LSP started")
 
   self._by_root[id] = {client = client, proc = proc}
 
@@ -260,34 +279,56 @@ function LSP:shutdown_all()
   end
 end
 
--- An example config for flow
 local flow_config = {
   cmd = './node_modules/.bin/flow',
+  languageId = 'javascript',
   args = {'lsp'},
   find_root = function(filename)
     return find_closest(filename.parent, '.flowconfig')
   end
 }
 
-local function client_for_current_buffer()
-  local config = flow_config
-  local filename = P(vim.call.expand("%:p"))
+local merlin_config = {
+  cmd = '/Users/andreypopp/.nodenv/shims/esy',
+  languageId = 'ocaml',
+  args = {
+    'exec-command',
+    '--include-build-env',
+    '--include-current-env',
+    '/Users/andreypopp/Workspace/esy-ocaml/merlin/ocamlmerlin-lsp'
+  },
+  find_root = function(filename)
+    return find_closest(filename.parent, 'package.json')
+  end
+}
 
+local config_by_filetype = {
+  javascript = flow_config,
+  ocaml = merlin_config,
+  reason = merlin_config,
+}
+
+local function get()
+  local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
+  local config = config_by_filetype[filetype]
+  if not config then
+    return
+  end
+  local filename = P(vim.call.expand("%:p"))
   local root = config.find_root(filename)
   if not root then
     return
   end
-
   local id = root.string
-  return LSP:get(id, root, config)
+  return LSP:start(id, root, config)
 end
 
 vim.autocommand.register {
   event = vim.autocommand.FileType,
-  pattern = 'javascript',
+  pattern = '*',
   action = function()
     async.task(function()
-      local client = client_for_current_buffer()
+      local client = get()
       if client then
         client:did_open(vim.call.bufnr('%'))
       end
@@ -299,7 +340,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertEnter,
   pattern = '*',
   action = function()
-    local client = client_for_current_buffer()
+    local client = get()
     if client then
       client:did_insert_enter(vim.call.bufnr('%'))
     end
@@ -310,7 +351,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertLeave,
   pattern = '*',
   action = function()
-    local client = client_for_current_buffer()
+    local client = get()
     if client then
       client:did_insert_leave(vim.call.bufnr('%'))
     end
