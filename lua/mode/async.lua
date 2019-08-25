@@ -103,7 +103,45 @@ function Future:map(f)
   return next
 end
 
+-- Task
+--
+-- This is a wrapper around Lua coroutine which provides conveniences.
+--
+-- To create a task one does:
+--
+--   local task = Task:new(function() ... end)
+--
+-- Then we can wait for its completion:
+--
+--   task.completed:wait()
+--
+-- Or we can subscribe to its completion:
+--
+--   task.completed:subscribe(function() ... end)
+--
+
+local Task = util.Object:extend()
+
+function Task:init(f)
+  self.completed = Future:new()
+  self.coro = coroutine.create(function()
+    f()
+    self.completed:put()
+  end)
+  assert(coroutine.resume(self.coro))
+end
+
+function Task:wait()
+  return self.completed:wait()
+end
+
+local function task(f)
+  return Task:new(f)
+end
+
 return {
   Channel = Channel,
   Future = Future,
+  Task = Task,
+  task = task,
 }

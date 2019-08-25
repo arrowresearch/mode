@@ -20,7 +20,8 @@ end
 
 function Stream:read_start(f)
   assert(self.handle, 'Stream.read_start: no handle')
-  uv.read_start(self.handle, function(err, chunk)
+  local handle = self.handle
+  uv.read_start(handle, function(err, chunk)
     if err then
       assert(not err, err)
     elseif chunk then
@@ -30,7 +31,7 @@ function Stream:read_start(f)
     end
   end)
   return function()
-    uv.read_stop(self.handle)
+    uv.read_stop(handle)
   end
 end
 
@@ -108,7 +109,7 @@ end
 
 function Process:shutdown()
   assert(self.handle ~= nil, 'Process.shutdown: handle is nil')
-  self.stdin:shutdown():map(function()
+  return self.stdin:shutdown():map(function()
     self.stdout:close()
     self.stderr:close()
     self.stdin:close()
