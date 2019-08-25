@@ -289,7 +289,7 @@ local flow_config = {
 }
 
 local merlin_config = {
-  cmd = '/Users/andreypopp/.nodenv/shims/esy',
+  cmd = 'esy',
   languageId = 'ocaml',
   args = {
     'exec-command',

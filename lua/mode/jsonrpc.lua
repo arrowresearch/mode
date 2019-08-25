@@ -71,7 +71,7 @@ function JSONRPCClient:notify(method, params)
   local notification = {
     jsonrpc = "2.0",
     method = method,
-    params = params,
+    params = params or {},
   }
   self:send(notification)
 end
@@ -86,7 +86,7 @@ function JSONRPCClient:request(method, params)
   local request = {
     jsonrpc = "2.0",
     method = method,
-    params = params,
+    params = params or {},
     id = request_id
   }
   self:send(request)
