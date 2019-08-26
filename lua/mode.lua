@@ -44,8 +44,8 @@ end
 
 function Signs:place(sign)
   local res = vim.call.sign_place(
-    0, self.name, self.name, sign.expr,
-    {lnum = sign.lnum, priority = sign.priority or 100}
+    0, self.name, self.name, sign.buffer,
+    {lnum = sign.line + 1, priority = sign.priority or 100}
   )
   assert(res ~= -1, 'Signs.place: unable to place sign')
 end
@@ -55,15 +55,65 @@ function Signs:unplace_all()
   assert(res == 0, 'Signs.unplace_all: Unable to unplace all signs')
 end
 
+-- Highlights
+
+local Highlights = util.Object:extend()
+
+function Highlights:init(o)
+  self.namespace = vim._vim.api.nvim_create_namespace(o.name or '')
+end
+
+function Highlights:add(item)
+  if item.buffer == -1 then
+    return
+  end
+  local start, stop = item.range.start, item.range['end']
+  if start.line == stop.line then
+    vim._vim.api.nvim_buf_add_highlight(
+      item.buffer, self.namespace, item.hlgroup,
+      start.line, start.character, stop.character
+    )
+  else
+    for line = start.line, stop.line do
+      if line == start.line then
+        vim._vim.api.nvim_buf_add_highlight(
+          item.buffer, self.namespace, item.hlgroup,
+          line, start.character, -1
+        )
+      elseif line == stop.line then
+        vim._vim.api.nvim_buf_add_highlight(
+          item.buffer, self.namespace, item.hlgroup,
+          line, 0, stop.character
+        )
+      else
+        vim._vim.api.nvim_buf_add_highlight(
+          item.buffer, self.namespace, item.hlgroup,
+          line, 0, -1
+        )
+      end
+    end
+  end
+end
+
+function Highlights:clear(buffer)
+  if buffer == -1 then
+    return
+  end
+  vim._vim.api.nvim_buf_clear_namespace(buffer, self.namespace, 0, -1)
+end
+
 -- Diagnostics
 
 local Diagnostics = {
   use_quickfix_list = true,
-  use_signs = Signs:new({
+  use_highlights = Highlights:new {
+    name = 'mode-diag-hightlights'
+  },
+  use_signs = Signs:new {
     name = 'mode-diag',
     text = '✖',
     texthl = 'Error',
-  }),
+  },
   updated = false,
   by_filename = {}
 }
@@ -73,11 +123,15 @@ function Diagnostics:get(filename)
 end
 
 function Diagnostics:set(filename, items)
+  items = items or {}
   items = util.array_copy(items)
   table.sort(items, function(a, b)
-    if a.lnum < b.lnum then
+    if a.range.start.line < b.range.start.line then
       return true
-    elseif a.lnum == b.lnum and a.col < b.col then
+    elseif
+      a.range.start.line == b.range.start.line
+      and a.range.start.character < b.range.start.character
+    then
       return true
     else
       return false
@@ -85,6 +139,28 @@ function Diagnostics:set(filename, items)
   end)
   self.by_filename[filename.string] = items
   self.updated = false
+end
+
+function Diagnostics:update_for_buffer(buffer)
+  local items = self.by_filename[vim._vim.api.nvim_buf_get_name(buffer)] or {}
+  if self.use_highlights then
+    self.use_highlights:clear(buffer)
+  end
+  for _, item in ipairs(items) do
+    if self.use_highlights then
+      self.use_highlights:add {
+        hlgroup = 'ModeError',
+        buffer = buffer,
+        range = item.range,
+      }
+    end
+    if self.use_signs then
+      self.use_signs:place {
+        buffer = buffer,
+        line = item.range.start.line,
+      }
+    end
+  end
 end
 
 function Diagnostics:update()
@@ -98,16 +174,42 @@ function Diagnostics:update()
   if self.use_quickfix_list then
     vim.call.setqflist({}, 'r')
   end
-  for _, items in pairs(self.by_filename) do
-    -- vim.show("diag: " .. filename .. " len: " .. tostring(#items))
-    if self.use_quickfix_list then
-      vim.call.setqflist(items, 'a')
+
+  local qf = {}
+
+  for filename, items in pairs(self.by_filename) do
+    local buffer = vim.call.bufnr(filename)
+    local buffer_loaded = buffer ~= -1
+
+    if self.use_highlights then
+      self.use_highlights:clear(buffer)
     end
-    if self.use_signs then
-      for _, item in ipairs(items) do
-        self.use_signs:place({expr = item.filename, lnum = item.lnum})
+
+    for _, item in ipairs(items) do
+      if self.use_signs and buffer_loaded then
+        self.use_signs:place {
+          buffer = buffer,
+          line = item.range.start.line,
+        }
       end
+      if self.use_highlights and buffer_loaded then
+        self.use_highlights:add {
+          hlgroup = 'ModeError',
+          buffer = buffer,
+          range = item.range,
+        }
+      end
+      table.insert(qf, {
+        filename = item.filename.string,
+        lnum = item.range.start.line + 1,
+        col = item.range.start.character + 1,
+        text = item.message,
+        type = 'E',
+      })
     end
+  end
+  if self.use_quickfix_list then
+    vim.call.setqflist(qf, 'r')
   end
   self.updated = true
 end
@@ -137,6 +239,14 @@ end
 
 function Position.__le(a, b)
   return a == b or a < b
+end
+
+function Position:current()
+  local p = vim.call.getpos('.')
+  return self:new {
+    line = p[2] - 1,
+    character = p[3] - 1,
+  }
 end
 
 local TextDocumentPosition = util.Object:extend()
@@ -209,11 +319,9 @@ function LSPClient:init(o)
         diag.relatedInformation = nil
         diag.relatedLocations = nil
         table.insert(items, {
-          filename = filename.string,
-	        lnum = diag.range.start.line + 1,
-	        col = diag.range.start.character + 1,
-	        text = diag.message,
-	        type = 'E',
+          filename = filename,
+          range = diag.range,
+	        message = diag.message,
 	      })
       end
       Diagnostics:set(filename, items)
@@ -482,43 +590,47 @@ local function prev_diagnostic_location(o)
   o = o or {wrap = true}
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
   local items = Diagnostics:get(filename)
-  local p = vim.call.getpos('.')
-  local lnum, col = p[2], p[3]
+  local cur = Position:current()
   local found = nil
   for i = #items, 1, -1 do
-    local item = items[i]
-    if item.lnum < lnum or item.lnum == lnum and item.col < col then
-      found = item
+    local start = items[i].range.start
+    if
+        start.line < cur.line
+        or start.line == cur.line and start.character < cur.character
+    then
+      found = start
       break
     end
   end
   if not found and o.wrap and #items > 0 then
-    found = items[#items]
+    found = items[#items].range.start
   end
   if found then
-    vim.call.cursor(found.lnum, found.col)
+    vim.call.cursor(found.line + 1, found.character + 1)
   end
 end
 
 local function next_diagnostic_location(o)
   o = o or {wrap = true}
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local cur = Position:current()
   local items = Diagnostics:get(filename)
-  local p = vim.call.getpos('.')
-  local lnum, col = p[2], p[3]
   local found = nil
   for i = 1, #items do
-    local item = items[i]
-    if item.lnum > lnum or item.lnum == lnum and item.col > col then
-      found = item
+    local start = items[i].range.start
+    if
+        start.line > cur.line
+        or start.line == cur.line and start.character > cur.character
+    then
+      found = start
       break
     end
   end
   if not found and o.wrap and #items > 0 then
-    found = items[1]
+    found = items[1].range.start
   end
   if found then
-    vim.call.cursor(found.lnum, found.col)
+    vim.call.cursor(found.line + 1, found.character + 1)
   end
 end
 
@@ -527,10 +639,12 @@ vim.autocommand.register {
   pattern = '*',
   action = function()
     async.task(function()
+      local buffer = vim.call.bufnr('%')
       local client = get_lsp_client_for_this_buffer()
       if client then
-        client:did_open(vim.call.bufnr('%'))
+        client:did_open(buffer)
       end
+      Diagnostics:update_for_buffer(buffer)
     end)
   end
 }
