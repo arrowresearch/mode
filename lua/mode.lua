@@ -634,6 +634,30 @@ local function next_diagnostic_location(o)
   end
 end
 
+local function current_diagnostic()
+  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local cur = Position:current()
+  local items = Diagnostics:get(filename)
+  for i = 1, #items do
+    local item = items[i]
+    local start, stop = item.range.start, item.range['end']
+    if cur.line < stop.line then
+      break
+    elseif
+      cur.line == start.line
+      and cur.character >= start.character
+      or cur.line > start.line
+    then
+      if
+        cur.line == stop.line and cur.character < stop.character
+        or cur.line < stop.line
+      then
+        return item
+      end
+    end
+  end
+end
+
 vim.autocommand.register {
   event = vim.autocommand.FileType,
   pattern = '*',
@@ -686,7 +710,13 @@ vim.autocommand.register {
   pattern = '*',
   action = function()
     async.task(function()
-      Modal:close()
+      local mode = vim._vim.api.nvim_get_mode().mode
+      local diag = current_diagnostic()
+      if diag and mode == 'n' then
+        Modal:open(diag.message)
+      else
+        Modal:close()
+      end
     end)
   end
 }
