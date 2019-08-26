@@ -74,9 +74,18 @@ local function table_is_array(t)
   return type(t) == 'table' and (#t > 0 or next(t) == nil)
 end
 
+local function array_copy(t)
+  local copy = {}
+  for i, v in ipairs(t) do
+    copy[i] = v
+  end
+  return copy
+end
+
 return {
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
   table_is_array = table_is_array,
+  array_copy = array_copy,
 }

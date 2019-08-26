@@ -68,7 +68,21 @@ local Diagnostics = {
   by_filename = {}
 }
 
+function Diagnostics:get(filename)
+  return self.by_filename[filename.string] or {}
+end
+
 function Diagnostics:set(filename, items)
+  items = util.array_copy(items)
+  table.sort(items, function(a, b)
+    if a.lnum < b.lnum then
+      return true
+    elseif a.lnum == b.lnum and a.col < b.col then
+      return true
+    else
+      return false
+    end
+  end)
   self.by_filename[filename.string] = items
   self.updated = false
 end
@@ -109,6 +123,20 @@ end
 
 function Position.__eq(a, b)
   return a.line == b.line and a.character == b.character
+end
+
+function Position.__lt(a, b)
+  if a.line < b.line then
+    return true
+  elseif a.line == b.line and a.character < b.character then
+    return true
+  else
+    return false
+  end
+end
+
+function Position.__le(a, b)
+  return a == b or a < b
 end
 
 local TextDocumentPosition = util.Object:extend()
@@ -450,6 +478,50 @@ local function hover()
   end)
 end
 
+local function prev_diagnostic_location(o)
+  o = o or {wrap = true}
+  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local items = Diagnostics:get(filename)
+  local p = vim.call.getpos('.')
+  local lnum, col = p[2], p[3]
+  local found = nil
+  for i = #items, 1, -1 do
+    local item = items[i]
+    if item.lnum < lnum or item.lnum == lnum and item.col < col then
+      found = item
+      break
+    end
+  end
+  if not found and o.wrap and #items > 0 then
+    found = items[#items]
+  end
+  if found then
+    vim.call.cursor(found.lnum, found.col)
+  end
+end
+
+local function next_diagnostic_location(o)
+  o = o or {wrap = true}
+  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local items = Diagnostics:get(filename)
+  local p = vim.call.getpos('.')
+  local lnum, col = p[2], p[3]
+  local found = nil
+  for i = 1, #items do
+    local item = items[i]
+    if item.lnum > lnum or item.lnum == lnum and item.col > col then
+      found = item
+      break
+    end
+  end
+  if not found and o.wrap and #items > 0 then
+    found = items[1]
+  end
+  if found then
+    vim.call.cursor(found.lnum, found.col)
+  end
+end
+
 vim.autocommand.register {
   event = vim.autocommand.FileType,
   pattern = '*',
@@ -510,4 +582,6 @@ return {
   Diagnostics = Diagnostics,
   definition = definition,
   hover = hover,
+  next_diagnostic_location = next_diagnostic_location,
+  prev_diagnostic_location = prev_diagnostic_location,
 }
