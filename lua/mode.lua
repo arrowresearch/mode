@@ -696,6 +696,14 @@ vim.autocommand.register {
 }
 
 vim.autocommand.register {
+  event = vim.autocommand.InsertEnter,
+  pattern = '*',
+  action = function()
+    Modal:close()
+  end
+}
+
+vim.autocommand.register {
   event = vim.autocommand.VimLeavePre,
   pattern = '*',
   action = function()
@@ -706,7 +714,7 @@ vim.autocommand.register {
 }
 
 vim.autocommand.register {
-  event = {vim.autocommand.CursorMoved, vim.autocommand.CursorMovedI},
+  event = {vim.autocommand.CursorMoved},
   pattern = '*',
   action = function()
     async.task(function()
