@@ -1,4 +1,4 @@
--- luacheck: globals vim
+-- luacheck: globals vim string
 
 local util = require 'mode.util'
 local path = require 'mode.path'
@@ -7,6 +7,11 @@ local async = require 'mode.async'
 local jsonrpc = require 'mode.jsonrpc'
 local uv = require 'mode.uv'
 local P = path.split
+
+local function report_error(msg, ...)
+  msg = string.format(msg, ...)
+  print("ERROR: " .. msg)
+end
 
 local function find_closest(curr, fname)
   local stat, _ = uv._uv.fs_stat((curr / fname).string)
@@ -332,6 +337,7 @@ local merlin_config = {
 
 local config_by_filetype = {
   javascript = flow_config,
+  ['javascript.jsx'] = flow_config,
   ocaml = merlin_config,
   reason = merlin_config,
 }
@@ -355,6 +361,7 @@ local function definition()
   async.task(function()
     local lsp = get_lsp_client_for_this_buffer()
     if not lsp then
+      report_error "no LSP found for this buffer"
       return
     end
 
@@ -411,6 +418,7 @@ local function hover()
   async.task(function()
     local lsp = get_lsp_client_for_this_buffer()
     if not lsp then
+      report_error "no LSP found for this buffer"
       return
     end
 
@@ -423,7 +431,21 @@ local function hover()
       return
     end
 
-    local message = resp.result.contents.value
+    local message
+    if not resp.result then
+      message = "<no response>"
+    else
+      local contents = resp.result.contents
+      if util.table_is_array(contents) then
+        local parts = {}
+        for _, item in ipairs(contents) do
+          table.insert(parts, item.value)
+        end
+        message = table.concat(parts, '\n')
+      else
+        message = contents.value
+      end
+    end
     Modal:open(message)
   end)
 end

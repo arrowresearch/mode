@@ -70,9 +70,13 @@ local function table_pack(...)
   return t
 end
 
+local function table_is_array(t)
+  return type(t) == 'table' and (#t > 0 or next(t) == nil)
+end
 
 return {
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
+  table_is_array = table_is_array,
 }
