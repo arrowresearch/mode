@@ -79,7 +79,7 @@ function Diagnostics:update()
   if self.use_quickfix_list then
     vim.call.setqflist({}, 'r')
   end
-  for filename, items in pairs(self.by_filename) do
+  for _, items in pairs(self.by_filename) do
     -- vim.show("diag: " .. filename .. " len: " .. tostring(#items))
     if self.use_quickfix_list then
       vim.call.setqflist(items, 'a')
@@ -95,18 +95,53 @@ end
 
 -- LSP
 
-local LSP = {
-  _by_root = {},
+local Position = util.Object:extend()
 
-}
+function Position:init(o)
+  self.line = o.line
+  self.character = o.character
+end
 
-function LSP.uri_of_path(p)
+function Position.__eq(a, b)
+  return a.line == b.line and a.character == b.character
+end
+
+local TextDocumentPosition = util.Object:extend()
+
+function TextDocumentPosition:init(o)
+  self.textDocument = {uri = o.uri}
+  self.position = Position:new {
+    line = o.line,
+    character = o.character,
+  }
+end
+
+function TextDocumentPosition.__eq(a, b)
+  return a.textDocument.uri == b.textDocument.uri and a.position == b.position
+end
+
+local LSPUtil = {}
+
+function LSPUtil.uri_of_path(p)
   return "file://" .. p.string
 end
 
-function LSP.uri_to_path(uri)
+function LSPUtil.uri_to_path(uri)
   -- strips file:// prefix
   return P(string.sub(uri, 8))
+end
+
+function LSPUtil.current_text_document_position()
+  local pos = vim.call.getpos('.')
+  local lnum = pos[2]
+  local col = pos[3]
+  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local uri = LSPUtil.uri_of_path(filename)
+  return TextDocumentPosition:new {
+    uri = uri,
+    line = lnum - 1,
+    character = col - 1,
+  }
 end
 
 local LSPClient = util.Object:extend()
@@ -126,7 +161,7 @@ function LSPClient:init(o)
   }
   self.initialized = self.jsonrpc:request("initialize", {
     processId = uv._uv.getpid(),
-    rootUri = LSP.uri_of_path(self.root),
+    rootUri = LSPUtil.uri_of_path(self.root),
     capabilities = self.capabilities,
   }):map(function(reply)
     self.is_utf8 = reply.result.offsetEncoding == "utf-8"
@@ -135,7 +170,7 @@ function LSPClient:init(o)
 
   self.jsonrpc.notifications:subscribe(function(notif)
     if notif.method == 'textDocument/publishDiagnostics' then
-      local filename = LSP.uri_to_path(notif.params.uri)
+      local filename = LSPUtil.uri_to_path(notif.params.uri)
       local items = {}
       for _, diag in ipairs(notif.params.diagnostics) do
         diag.relatedInformation = nil
@@ -162,7 +197,7 @@ function LSPClient:did_open(bufnr)
   if self.seen then return end
   self.seen = true
   self.initialized:wait()
-  local uri = LSP.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr)))
+  local uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr)))
   local lines = vim._vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
   local text = table.concat(lines, "\n")
   if vim._vim.api.nvim_buf_get_option(bufnr, 'eol') then
@@ -189,7 +224,7 @@ function LSPClient:did_change(_, bufnr, tick, start, stop, stopped, bytes, _, un
   local length = (self.is_utf8 and bytes) or units
   self.jsonrpc:notify("textDocument/didChange", {
     textDocument = {
-      uri = LSP.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr))),
+      uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr))),
       version = tick
     },
     contentChanges = {
@@ -226,12 +261,9 @@ function LSPClient:shutdown()
   self.jsonrpc:stop()
 end
 
-function LSP:get(id)
-  local lsp = self._by_root[id]
-  if lsp then
-    return lsp.client
-  end
-end
+local LSP = {
+  _by_root = {},
+}
 
 function LSP:start(id, root, config)
   -- check if we have client running for the id
@@ -304,7 +336,7 @@ local config_by_filetype = {
   reason = merlin_config,
 }
 
-local function get()
+local function get_lsp_client_for_this_buffer()
   local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
   local config = config_by_filetype[filetype]
   if not config then
@@ -319,12 +351,89 @@ local function get()
   return LSP:start(id, root, config)
 end
 
+local function go_to_definition()
+  async.task(function()
+    local lsp = get_lsp_client_for_this_buffer()
+    if not lsp then
+      return
+    end
+
+    local params = LSPUtil.current_text_document_position()
+    local resp = lsp.jsonrpc:request("textDocument/definition", params):wait()
+    if not resp.result or #resp.result == 0 then
+      return
+    end
+
+    local pos = resp.result[1]
+    local uri = pos.uri
+    local filename = LSPUtil.uri_to_path(pos.uri)
+
+    if uri ~= params.textDocument.uri then
+      vim.execute([[edit %s]], filename.string)
+    end
+
+    local lnum = pos.range.start.line + 1
+    local col = pos.range.start.character + 1
+    vim.call.cursor(lnum, col)
+  end)
+end
+
+local Modal = {
+  win = nil,
+}
+
+function Modal:open(message)
+  self:close()
+  local win = vim.call.win_getid()
+  local width = vim._vim.api.nvim_win_get_width(win)
+  local height = vim._vim.api.nvim_win_get_height(win)
+  local size = 4
+  local buf = vim._vim.api.nvim_create_buf(false, true)
+  vim._vim.api.nvim_buf_set_lines(buf, 0, -1, false, { message })
+  self.win = vim._vim.api.nvim_open_win(buf, false, {
+    relative = 'win',
+    style = 'minimal',
+    height = size,
+    width = width,
+    row = height - size + 1,
+    col = 0,
+  })
+end
+
+function Modal:close()
+  if self.win then
+    vim._vim.api.nvim_win_close(self.win, true)
+    self.win = nil
+  end
+end
+
+local function hover()
+  async.task(function()
+    local lsp = get_lsp_client_for_this_buffer()
+    if not lsp then
+      return
+    end
+
+    local pos = LSPUtil.current_text_document_position()
+    local resp = lsp.jsonrpc:request("textDocument/hover", pos):wait()
+
+    -- Check that we are at the same position
+    local next_pos = LSPUtil.current_text_document_position()
+    if next_pos ~= pos then
+      return
+    end
+
+    local message = resp.result.contents.value
+    Modal:open(message)
+  end)
+end
+
 vim.autocommand.register {
   event = vim.autocommand.FileType,
   pattern = '*',
   action = function()
     async.task(function()
-      local client = get()
+      local client = get_lsp_client_for_this_buffer()
       if client then
         client:did_open(vim.call.bufnr('%'))
       end
@@ -336,7 +445,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertEnter,
   pattern = '*',
   action = function()
-    local client = get()
+    local client = get_lsp_client_for_this_buffer()
     if client then
       client:did_insert_enter(vim.call.bufnr('%'))
     end
@@ -347,7 +456,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertLeave,
   pattern = '*',
   action = function()
-    local client = get()
+    local client = get_lsp_client_for_this_buffer()
     if client then
       client:did_insert_leave(vim.call.bufnr('%'))
     end
@@ -364,7 +473,19 @@ vim.autocommand.register {
   end
 }
 
+vim.autocommand.register {
+  event = {vim.autocommand.CursorMoved, vim.autocommand.CursorMovedI},
+  pattern = '*',
+  action = function()
+    async.task(function()
+      Modal:close()
+    end)
+  end
+}
+
 return {
   LSP = LSP,
   Diagnostics = Diagnostics,
+  go_to_definition = go_to_definition,
+  hover = hover,
 }
