@@ -351,7 +351,7 @@ local function get_lsp_client_for_this_buffer()
   return LSP:start(id, root, config)
 end
 
-local function go_to_definition()
+local function definition()
   async.task(function()
     local lsp = get_lsp_client_for_this_buffer()
     if not lsp then
@@ -486,6 +486,6 @@ vim.autocommand.register {
 return {
   LSP = LSP,
   Diagnostics = Diagnostics,
-  go_to_definition = go_to_definition,
+  definition = definition,
   hover = hover,
 }

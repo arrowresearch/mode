@@ -26,7 +26,7 @@ local function run(o)
     style = 'minimal',
     height = height,
     width = width,
-    row = row,
+    row = row + 1,
     col = 0,
   })
   vim._vim.api.nvim_win_set_option(fwin, 'winhl', 'Normal:MyHighlight')
