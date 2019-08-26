@@ -80,7 +80,7 @@ function Diagnostics:update()
     vim.call.setqflist({}, 'r')
   end
   for filename, items in pairs(self.by_filename) do
-    vim.show("diag: " .. filename .. " len: " .. tostring(#items))
+    -- vim.show("diag: " .. filename .. " len: " .. tostring(#items))
     if self.use_quickfix_list then
       vim.call.setqflist(items, 'a')
     end
@@ -161,9 +161,7 @@ end
 function LSPClient:did_open(bufnr)
   if self.seen then return end
   self.seen = true
-  vim.show('did')
   self.initialized:wait()
-  vim.show('open')
   local uri = LSP.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr)))
   local lines = vim._vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
   local text = table.concat(lines, "\n")
@@ -185,9 +183,7 @@ function LSPClient:did_open(bufnr)
 end
 
 function LSPClient:did_change(_, bufnr, tick, start, stop, stopped, bytes, _, units)
-  vim.show('did')
   self.initialized:wait()
-  vim.show('change')
   local lines = vim._vim.api.nvim_buf_get_lines(bufnr, start, stopped, true)
   local text = table.concat(lines, "\n") .. ((stopped > start) and "\n" or "")
   local length = (self.is_utf8 and bytes) or units
@@ -258,7 +254,7 @@ function LSP:start(id, root, config)
     })
   })
 
-  vim.show("LSP started")
+  -- vim.show("LSP started")
 
   self._by_root[id] = {client = client, proc = proc}
 
