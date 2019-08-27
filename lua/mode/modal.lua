@@ -11,7 +11,11 @@ function Modal:open(message)
   local height = vim._vim.api.nvim_win_get_height(win)
   local size = 4
   local buf = vim._vim.api.nvim_create_buf(false, true)
-  vim._vim.api.nvim_buf_set_lines(buf, 0, -1, false, { message })
+  local lines = {}
+  for line in string.gmatch(message, '([^\n\r]+)') do
+    table.insert(lines, line)
+  end
+  vim._vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   self.win = vim._vim.api.nvim_open_win(buf, false, {
     relative = 'win',
     style = 'minimal',

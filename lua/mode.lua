@@ -348,6 +348,34 @@ local function definition()
   end)
 end
 
+local function type_definition()
+  async.task(function()
+    local lsp = get_lsp_client()
+    if not lsp then
+      report_error "no LSP found for this buffer"
+      return
+    end
+
+    local params = LSPUtil.current_text_document_position()
+    local resp = lsp.jsonrpc:request("textDocument/typeDefinition", params):wait()
+    if not resp.result or #resp.result == 0 then
+      return
+    end
+
+    local pos = resp.result[1]
+    local uri = pos.uri
+    local filename = LSPUtil.uri_to_path(pos.uri)
+
+    if uri ~= params.textDocument.uri then
+      vim.execute([[edit %s]], filename.string)
+    end
+
+    local lnum = pos.range.start.line + 1
+    local col = pos.range.start.character + 1
+    vim.call.cursor(lnum, col)
+  end)
+end
+
 local function hover()
   async.task(function()
     local lsp = get_lsp_client()
@@ -521,6 +549,7 @@ vim.autocommand.register {
 return {
   LSP = LSP,
   definition = definition,
+  type_definition = type_definition,
   hover = hover,
   next_diagnostic_location = next_diagnostic_location,
   prev_diagnostic_location = prev_diagnostic_location,
