@@ -5,6 +5,7 @@ local path = require 'mode.path'
 local vim = require 'mode.vim'
 local async = require 'mode.async'
 local jsonrpc = require 'mode.jsonrpc'
+local diagnostics = require 'mode.diagnostics'
 local uv = require 'mode.uv'
 local P = path.split
 
@@ -25,193 +26,6 @@ local function find_closest(curr, fname)
       return find_closest(next, fname)
     end
   end
-end
-
--- Signs
-
-local Signs = util.Object:extend()
-
-function Signs:init(o)
-  self.name = o.name
-  local res = vim.call.sign_define(self.name, {
-    text = o.text,
-    texthl = o.texthl,
-    linehl = o.linehl,
-    numhl = o.numhl,
-  })
-  assert(res == 0, 'Signs.init: unable to define sign')
-end
-
-function Signs:place(sign)
-  local res = vim.call.sign_place(
-    0, self.name, self.name, sign.buffer,
-    {lnum = sign.line + 1, priority = sign.priority or 100}
-  )
-  assert(res ~= -1, 'Signs.place: unable to place sign')
-end
-
-function Signs:unplace_all()
-  local res = vim.call.sign_unplace(self.name)
-  assert(res == 0, 'Signs.unplace_all: Unable to unplace all signs')
-end
-
--- Highlights
-
-local Highlights = util.Object:extend()
-
-function Highlights:init(o)
-  self.namespace = vim._vim.api.nvim_create_namespace(o.name or '')
-end
-
-function Highlights:add(item)
-  if item.buffer == -1 then
-    return
-  end
-  local start, stop = item.range.start, item.range['end']
-  if start.line == stop.line then
-    vim._vim.api.nvim_buf_add_highlight(
-      item.buffer, self.namespace, item.hlgroup,
-      start.line, start.character, stop.character
-    )
-  else
-    for line = start.line, stop.line do
-      if line == start.line then
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, start.character, -1
-        )
-      elseif line == stop.line then
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, 0, stop.character
-        )
-      else
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, 0, -1
-        )
-      end
-    end
-  end
-end
-
-function Highlights:clear(buffer)
-  if buffer == -1 then
-    return
-  end
-  vim._vim.api.nvim_buf_clear_namespace(buffer, self.namespace, 0, -1)
-end
-
--- Diagnostics
-
-local Diagnostics = {
-  use_quickfix_list = true,
-  use_highlights = Highlights:new {
-    name = 'mode-diag-hightlights'
-  },
-  use_signs = Signs:new {
-    name = 'mode-diag',
-    text = '✖',
-    texthl = 'Error',
-  },
-  updated = false,
-  by_filename = {}
-}
-
-function Diagnostics:get(filename)
-  return self.by_filename[filename.string] or {}
-end
-
-function Diagnostics:set(filename, items)
-  items = items or {}
-  items = util.array_copy(items)
-  table.sort(items, function(a, b)
-    if a.range.start.line < b.range.start.line then
-      return true
-    elseif
-      a.range.start.line == b.range.start.line
-      and a.range.start.character < b.range.start.character
-    then
-      return true
-    else
-      return false
-    end
-  end)
-  self.by_filename[filename.string] = items
-  self.updated = false
-end
-
-function Diagnostics:update_for_buffer(buffer)
-  local items = self.by_filename[vim._vim.api.nvim_buf_get_name(buffer)] or {}
-  if self.use_highlights then
-    self.use_highlights:clear(buffer)
-  end
-  for _, item in ipairs(items) do
-    if self.use_highlights then
-      self.use_highlights:add {
-        hlgroup = 'ModeError',
-        buffer = buffer,
-        range = item.range,
-      }
-    end
-    if self.use_signs then
-      self.use_signs:place {
-        buffer = buffer,
-        line = item.range.start.line,
-      }
-    end
-  end
-end
-
-function Diagnostics:update()
-  if self.updated then
-    return
-  end
-  -- TODO(andreypopp): set signs per file
-  if self.use_signs then
-    self.use_signs:unplace_all()
-  end
-  if self.use_quickfix_list then
-    vim.call.setqflist({}, 'r')
-  end
-
-  local qf = {}
-
-  for filename, items in pairs(self.by_filename) do
-    local buffer = vim.call.bufnr(filename)
-    local buffer_loaded = buffer ~= -1
-
-    if self.use_highlights then
-      self.use_highlights:clear(buffer)
-    end
-
-    for _, item in ipairs(items) do
-      if self.use_signs and buffer_loaded then
-        self.use_signs:place {
-          buffer = buffer,
-          line = item.range.start.line,
-        }
-      end
-      if self.use_highlights and buffer_loaded then
-        self.use_highlights:add {
-          hlgroup = 'ModeError',
-          buffer = buffer,
-          range = item.range,
-        }
-      end
-      table.insert(qf, {
-        filename = item.filename.string,
-        lnum = item.range.start.line + 1,
-        col = item.range.start.character + 1,
-        text = item.message,
-        type = 'E',
-      })
-    end
-  end
-  if self.use_quickfix_list then
-    vim.call.setqflist(qf, 'r')
-  end
-  self.updated = true
 end
 
 -- LSP
@@ -324,9 +138,9 @@ function LSPClient:init(o)
 	        message = diag.message,
 	      })
       end
-      Diagnostics:set(filename, items)
+      diagnostics:set(filename, items)
       if not self.is_insert_mode then
-        Diagnostics:update()
+        diagnostics:update()
       end
     else
       vim.show(notif)
@@ -393,7 +207,7 @@ end
 
 function LSPClient:did_insert_leave(_)
   self.is_insert_mode = false
-  Diagnostics:update()
+  diagnostics:update()
 end
 
 function LSPClient:shutdown()
@@ -589,7 +403,7 @@ end
 local function prev_diagnostic_location(o)
   o = o or {wrap = true}
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
-  local items = Diagnostics:get(filename)
+  local items = diagnostics:get(filename)
   local cur = Position:current()
   local found = nil
   for i = #items, 1, -1 do
@@ -614,7 +428,7 @@ local function next_diagnostic_location(o)
   o = o or {wrap = true}
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
   local cur = Position:current()
-  local items = Diagnostics:get(filename)
+  local items = diagnostics:get(filename)
   local found = nil
   for i = 1, #items do
     local start = items[i].range.start
@@ -637,7 +451,7 @@ end
 local function current_diagnostic()
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
   local cur = Position:current()
-  local items = Diagnostics:get(filename)
+  local items = diagnostics:get(filename)
   for i = 1, #items do
     local item = items[i]
     local start, stop = item.range.start, item.range['end']
@@ -668,7 +482,6 @@ vim.autocommand.register {
       if client then
         client:did_open(buffer)
       end
-      Diagnostics:update_for_buffer(buffer)
     end)
   end
 }
@@ -731,7 +544,6 @@ vim.autocommand.register {
 
 return {
   LSP = LSP,
-  Diagnostics = Diagnostics,
   definition = definition,
   hover = hover,
   next_diagnostic_location = next_diagnostic_location,
