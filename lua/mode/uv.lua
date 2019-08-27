@@ -1,9 +1,11 @@
+-- luacheck: globals vim
 --
 -- High-level wrapper for libuv API.
 --
 
 local uv = vim.loop
 local util = require 'mode.util'
+local path = require 'mode.path'
 local async = require 'mode.async'
 
 -- Stream
@@ -83,7 +85,13 @@ local Process = util.Object:extend()
 
 function Process:init(o)
   self.cmd = o.cmd
+  if path.is(self.cmd) then
+    self.cmd = self.cmd.string
+  end
   self.cwd = o.cwd or nil
+  if path.is(self.cwd) then
+    self.cwd = self.cwd.string
+  end
   self.args = o.args
   self.pid = nil
   self.handle = nil

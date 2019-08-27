@@ -38,6 +38,10 @@ function _M.type(value)
 	return data[value] and 'path' or type(value)
 end
 
+function _M.is(value)
+  return not not data[value]
+end
+
 function _M.split(s)
 	if type(s)~='string' then error("bad argument #1 to split (string expected, got "..type(s)..")", 2) end
 	local this = {}

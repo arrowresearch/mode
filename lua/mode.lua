@@ -221,7 +221,7 @@ local LSP = {
   _by_root = {},
 }
 
-function LSP:start(id, root, config)
+function LSP:start(id, config)
   -- check if we have client running for the id
   local lsp = self._by_root[id]
   if lsp then
@@ -234,7 +234,7 @@ function LSP:start(id, root, config)
   })
 
   local client = LSPClient:new({
-    root = root,
+    root = config.root,
     languageId = config.languageId,
     jsonrpc = jsonrpc.JSONRPCClient:new({
       stream_input = proc.stdout,
@@ -264,24 +264,30 @@ function LSP:shutdown_all()
 end
 
 local flow_config = {
-  cmd = './node_modules/.bin/flow',
   languageId = 'javascript',
-  args = {'lsp'},
-  find_root = function(filename)
+  command = function(root)
+    local cmd = root / 'node_modules/.bin/flow'
+    local args = {'lsp'}
+    return cmd, args
+  end,
+  root = function(filename)
     return find_closest(filename.parent, '.flowconfig')
   end
 }
 
 local merlin_config = {
-  cmd = 'esy',
   languageId = 'ocaml',
-  args = {
-    'exec-command',
-    '--include-build-env',
-    '--include-current-env',
-    '/Users/andreypopp/Workspace/esy-ocaml/merlin/ocamlmerlin-lsp'
-  },
-  find_root = function(filename)
+  command = function(_)
+    local cmd = 'esy'
+    local args = {
+      'exec-command',
+      '--include-build-env',
+      '--include-current-env',
+      '/Users/andreypopp/Workspace/esy-ocaml/merlin/ocamlmerlin-lsp'
+    }
+    return cmd, args
+  end,
+  root = function(filename)
     return find_closest(filename.parent, 'package.json')
   end
 }
@@ -293,24 +299,30 @@ local config_by_filetype = {
   reason = merlin_config,
 }
 
-local function get_lsp_client_for_this_buffer()
+local function get_lsp_client()
   local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
   local config = config_by_filetype[filetype]
   if not config then
     return
   end
   local filename = P(vim.call.expand("%:p"))
-  local root = config.find_root(filename)
+  local root = config.root(filename)
   if not root then
     return
   end
+  local cmd, args = config.command(root)
   local id = root.string
-  return LSP:start(id, root, config)
+  return LSP:start(id, {
+    languageId = config.languageId,
+    root = root,
+    cmd = cmd,
+    args = args
+  })
 end
 
 local function definition()
   async.task(function()
-    local lsp = get_lsp_client_for_this_buffer()
+    local lsp = get_lsp_client()
     if not lsp then
       report_error "no LSP found for this buffer"
       return
@@ -338,7 +350,7 @@ end
 
 local function hover()
   async.task(function()
-    local lsp = get_lsp_client_for_this_buffer()
+    local lsp = get_lsp_client()
     if not lsp then
       report_error "no LSP found for this buffer"
       return
@@ -450,7 +462,7 @@ vim.autocommand.register {
   action = function()
     async.task(function()
       local buffer = vim.call.bufnr('%')
-      local client = get_lsp_client_for_this_buffer()
+      local client = get_lsp_client()
       if client then
         client:did_open(buffer)
       end
@@ -462,7 +474,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertEnter,
   pattern = '*',
   action = function()
-    local client = get_lsp_client_for_this_buffer()
+    local client = get_lsp_client()
     if client then
       client:did_insert_enter(vim.call.bufnr('%'))
     end
@@ -473,7 +485,7 @@ vim.autocommand.register {
   event = vim.autocommand.InsertLeave,
   pattern = '*',
   action = function()
-    local client = get_lsp_client_for_this_buffer()
+    local client = get_lsp_client()
     if client then
       client:did_insert_leave(vim.call.bufnr('%'))
     end
