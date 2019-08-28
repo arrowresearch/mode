@@ -6,18 +6,22 @@ local util = require 'mode.util'
 local vim = require 'mode.vim'
 local uv = require 'mode.uv'
 
-local BufferWatcherRecord = util.Object:extend()
+local BufferWatcher = util.Object:extend()
 
-function BufferWatcherRecord:init(o)
-  self.refcount = 0
+function BufferWatcher:init(o)
   self.updates = async.Channel:new()
   self.buffer = o.buffer
   self.is_utf8 = o.is_utf8 == nil and true or o.is_utf8
+  self.is_shutdown = false
+  self:_start()
 end
 
-function BufferWatcherRecord:_start()
+function BufferWatcher:_start()
   assert(vim._vim.api.nvim_buf_attach(self.buffer, false, {
     on_lines=function(_, _, tick, start, stop, stopped, bytes, _, units)
+      if self.is_shutdown then
+        return true
+      end
       async.task(function()
         self.updates:put {
           buffer = self.buffer,
@@ -34,47 +38,9 @@ function BufferWatcherRecord:_start()
   }))
 end
 
-function BufferWatcherRecord:use()
-  self.refcount = self.refcount + 1
-  if self.refcount == 1 then
-    self:_start()
-  end
-end
-
-function BufferWatcherRecord:release()
-  self.refcount = self.refcount - 1
-  if self.refcount == 0 then
-    -- TODO(andreypopp): this function isn't available for the current neovim
-    -- master, check back with neovim folks.
-    if vim._vim.api.nvim_buf_detach then
-      vim._vim.api.nvim_buf_detach(self.buffer)
-    end
-  end
-end
-
-function BufferWatcherRecord:shutdown()
-  vim._vim.api.nvim_buf_detach(self.buffer)
+function BufferWatcher:shutdown()
+  self.is_shutdown = true
   self.updates:close()
-end
-
-local BufferWatcher = {
-  _watchers = {}
-}
-
-function BufferWatcher:watch(buffer)
-  local existing = self._watchers[buffer]
-  if existing then
-    existing:use()
-    return existing
-  end
-
-  local watcher = BufferWatcherRecord:new {
-    buffer = buffer,
-  }
-  self._watchers[buffer] = watcher
-
-  watcher:use()
-  return watcher
 end
 
 local Linter = util.Object:extend()
@@ -144,7 +110,7 @@ function Linter:_run(buffer)
       table.insert(items, item)
     end
   end
-  self.diagnostics:put({{filename = filename, items = items}})
+  self.diagnostics:put({{filename = buffer_info.filename, items = items}})
   -- shutdown proc
   proc:shutdown()
 end
@@ -168,7 +134,7 @@ function Linter:did_change(change)
 end
 
 function Linter:did_open(buffer)
-  local watcher = BufferWatcher:watch(buffer)
+  local watcher = BufferWatcher:new { buffer = buffer }
   vim.wait()
   local buffer_info = {
     filename = path.split(vim._vim.api.nvim_buf_get_name(buffer)),
@@ -188,7 +154,7 @@ function Linter:shutdown()
     if buffer_info.proc then
       buffer_info.proc:shutdown()
     end
-    buffer_info.watcher:release()
+    buffer_info.watcher:shutdown()
     buffer_info.stop_updates()
   end
 end
