@@ -6,6 +6,7 @@ local Position = require 'mode.position'
 local diagnostics = require 'mode.diagnostics'
 local vim = require 'mode.vim'
 local path = require 'mode.path'
+local BufferWatcher = require 'mode.buffer_watcher'
 local P = path.split
 
 local TextDocumentPosition = util.Object:extend()
@@ -96,49 +97,52 @@ function LSPClient:init(o)
   end)
 end
 
-function LSPClient:did_open(bufnr)
+function LSPClient:did_open(buffer)
   if self.seen then return end
   self.seen = true
   self.initialized:wait()
-  local uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr)))
-  local lines = vim._vim.api.nvim_buf_get_lines(bufnr, 0, -1, true)
+  local uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
+  local lines = vim._vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
   local text = table.concat(lines, "\n")
-  if vim._vim.api.nvim_buf_get_option(bufnr, 'eol') then
+  if vim._vim.api.nvim_buf_get_option(buffer, 'eol') then
     text = text..'\n'
   end
   self.jsonrpc:notify("textDocument/didOpen", {
     textDocument = {
       uri = uri,
       text = text,
-      version = vim._vim.api.nvim_buf_get_changedtick(bufnr),
+      version = vim._vim.api.nvim_buf_get_changedtick(buffer),
       languageId = self.languageId,
     }
   })
-  vim._vim.api.nvim_buf_attach(bufnr, false, {
-    on_lines=function(...) self:did_change(...) end,
-    utf_sizes=not self.is_utf8
-  })
+  BufferWatcher:new {
+    buffer = buffer,
+    is_utf8 = self.is_utf8,
+  }.updates:subscribe(function(change)
+    self:did_change(change)
+  end)
 end
 
-function LSPClient:did_change(_, bufnr, tick, start, stop, stopped, bytes, _, units)
+function LSPClient:did_change(change)
   self.initialized:wait()
-  local lines = vim._vim.api.nvim_buf_get_lines(bufnr, start, stopped, true)
-  local text = table.concat(lines, "\n") .. ((stopped > start) and "\n" or "")
-  local length = (self.is_utf8 and bytes) or units
+  local lines = vim._vim.api.nvim_buf_get_lines(
+    change.buffer, change.start, change.stopped, true)
+  local text = table.concat(lines, "\n") .. ((change.stopped > change.start) and "\n" or "")
+  local length = (self.is_utf8 and change.bytes) or change.units
   self.jsonrpc:notify("textDocument/didChange", {
     textDocument = {
-      uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(bufnr))),
-      version = tick
+      uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(change.buffer))),
+      version = change.tick
     },
     contentChanges = {
       {
         range = {
           start = {
-            line = start,
+            line = change.start,
             character = 0
           },
           ["end"] = {
-            line = stop,
+            line = change.stop,
             character = 0
           }
         },
