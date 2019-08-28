@@ -16,6 +16,7 @@ end
 
 local LanguageService = {
   _by_root = {},
+  _by_buffer = {},
   _config_by_filetype = {},
 }
 
@@ -86,24 +87,37 @@ function LanguageService:linter_for_config(config)
 end
 
 function LanguageService:get(o)
-  o = o or {type = nil}
-  local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
+  o = o or {}
+  local type = o.type
+  local buffer = o.buffer or vim.call.expand('%')
+
+  local service
+
+  service = self._by_buffer[buffer]
+  if service then
+    return service
+  end
+
+  local filetype = vim._vim.api.nvim_buf_get_option(buffer, 'filetype')
   local config = self._config_by_filetype[filetype]
   if not config then
     return
   end
 
-  if o.type and o.type ~= config.type then
+  if type and type ~= config.type then
     return nil
   end
 
   if config.type == 'lsp' then
-    return self:lsp_for_config(config.config)
+    service = self:lsp_for_config(config.config)
   elseif config.type == 'linter' then
-    return self:linter_for_config(config.config)
+    service = self:linter_for_config(config.config)
   else
     assert(false, "Unknown language service type: " .. config.type)
   end
+
+  self._by_buffer[buffer] = service
+  return service
 end
 
 function LanguageService:shutdown(id)
@@ -130,14 +144,23 @@ vim.autocommand.register {
 }
 
 vim.autocommand.register {
+  event = vim.autocommand.BufUnload,
+  pattern = '*',
+  action = function(ev)
+    async.task(function()
+      LanguageService._by_buffer[ev.buffer] = nil
+    end)
+  end
+}
+
+vim.autocommand.register {
   event = vim.autocommand.FileType,
   pattern = '*',
-  action = function()
+  action = function(ev)
     async.task(function()
-      local buffer = vim.call.bufnr('%')
-      local service = LanguageService:get()
+      local service = LanguageService:get { buffer = ev.buffer }
       if service then
-        service:did_open(buffer)
+        service:did_open(ev.buffer)
       end
     end)
   end
@@ -146,26 +169,30 @@ vim.autocommand.register {
 vim.autocommand.register {
   event = vim.autocommand.InsertEnter,
   pattern = '*',
-  action = function()
-    local service = LanguageService:get()
-    if service then
-      async.task(function()
-        service:did_insert_enter(vim.call.bufnr('%'))
-      end)
-    end
+  action = function(ev)
+    async.task(function()
+      local service = LanguageService:get { buffer = ev.buffer }
+      if service then
+        async.task(function()
+          service:did_insert_enter(ev.buffer)
+        end)
+      end
+    end)
   end
 }
 
 vim.autocommand.register {
   event = vim.autocommand.InsertLeave,
   pattern = '*',
-  action = function()
-    local service = LanguageService:get()
-    if service then
-      async.task(function()
-        service:did_insert_leave(vim.call.bufnr('%'))
-      end)
-    end
+  action = function(ev)
+    async.task(function()
+      local service = LanguageService:get { buffer = ev.buffer }
+      if service then
+        async.task(function()
+          service:did_insert_leave(ev.buffer)
+        end)
+      end
+    end)
   end
 }
 

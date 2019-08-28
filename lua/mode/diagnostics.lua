@@ -152,9 +152,8 @@ end
 vim.autocommand.register {
   event = {vim.autocommand.BufEnter, vim.autocommand.BufNew},
   pattern = '*',
-  action = function()
-    local buffer = vim.call.bufnr('%')
-    Diagnostics:update_for_buffer(buffer)
+  action = function(ev)
+    Diagnostics:update_for_buffer(ev.buffer)
   end
 }
 

@@ -208,7 +208,10 @@ end
 function autocommand._trigger(id)
   local cb = _autocommand_callback[id]
   assert(cb ~= nil, 'Unknown autocommand id')
-  cb()
+  cb {
+    filename = call.expand('<afile>'),
+    buffer = tonumber(call.expand('<abuf>')),
+  }
 end
 
 local function show(o)
