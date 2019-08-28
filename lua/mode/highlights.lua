@@ -14,28 +14,35 @@ function Highlights:add(item)
     return
   end
   local start, stop = item.range.start, item.range['end']
-  if start.line == stop.line then
+  if not stop then
     vim._vim.api.nvim_buf_add_highlight(
       item.buffer, self.namespace, item.hlgroup,
-      start.line, start.character, stop.character
+      start.line, start.character, start.character + 1
     )
   else
-    for line = start.line, stop.line do
-      if line == start.line then
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, start.character, -1
-        )
-      elseif line == stop.line then
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, 0, stop.character
-        )
-      else
-        vim._vim.api.nvim_buf_add_highlight(
-          item.buffer, self.namespace, item.hlgroup,
-          line, 0, -1
-        )
+    if start.line == stop.line then
+      vim._vim.api.nvim_buf_add_highlight(
+        item.buffer, self.namespace, item.hlgroup,
+        start.line, start.character, stop.character
+      )
+    else
+      for line = start.line, stop.line do
+        if line == start.line then
+          vim._vim.api.nvim_buf_add_highlight(
+            item.buffer, self.namespace, item.hlgroup,
+            line, start.character, -1
+          )
+        elseif line == stop.line then
+          vim._vim.api.nvim_buf_add_highlight(
+            item.buffer, self.namespace, item.hlgroup,
+            line, 0, stop.character
+          )
+        else
+          vim._vim.api.nvim_buf_add_highlight(
+            item.buffer, self.namespace, item.hlgroup,
+            line, 0, -1
+          )
+        end
       end
     end
   end
