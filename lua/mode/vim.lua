@@ -4,6 +4,7 @@
 --
 
 local util = require 'mode.util'
+local async = require 'mode.async'
 
 -- Wait for VIM API to be available.
 --
@@ -13,12 +14,11 @@ local function wait()
   if not vim.in_fast_event() then
     return
   end
-  local running = coroutine.running()
-  assert(running, 'Should be called from a coroutine')
+  local done = async.Future:new()
   vim.schedule(function()
-    assert(coroutine.resume(running))
+    done:put()
   end)
-  coroutine.yield()
+  done:wait()
 end
 
 -- Proxy for convenient calls to vim functions.
