@@ -23,23 +23,21 @@ function TextDocumentPosition.__eq(a, b)
   return a.textDocument.uri == b.textDocument.uri and a.position == b.position
 end
 
-local LSPUtil = {}
-
-function LSPUtil.uri_of_path(p)
+function uri_of_path(p)
   return "file://" .. p.string
 end
 
-function LSPUtil.uri_to_path(uri)
+function uri_to_path(uri)
   -- strips file:// prefix
   return P(string.sub(uri, 8))
 end
 
-function LSPUtil.current_text_document_position()
+function current_text_document_position()
   local pos = vim.call.getpos('.')
   local lnum = pos[2]
   local col = pos[3]
   local filename = P(vim._vim.api.nvim_buf_get_name(0))
-  local uri = LSPUtil.uri_of_path(filename)
+  local uri = uri_of_path(filename)
   return TextDocumentPosition:new {
     uri = uri,
     line = lnum - 1,
@@ -67,7 +65,7 @@ function LSPClient:init(o)
   }
   self.initialized = self.jsonrpc:request("initialize", {
     processId = uv._uv.getpid(),
-    rootUri = LSPUtil.uri_of_path(self.root),
+    rootUri = uri_of_path(self.root),
     capabilities = self.capabilities,
   }):map(function(reply)
     self.is_utf8 = reply.result.offsetEncoding == "utf-8"
@@ -76,7 +74,7 @@ function LSPClient:init(o)
 
   self.jsonrpc.notifications:subscribe(function(notif)
     if notif.method == 'textDocument/publishDiagnostics' then
-      local filename = LSPUtil.uri_to_path(notif.params.uri)
+      local filename = uri_to_path(notif.params.uri)
       local items = {}
       for _, diag in ipairs(notif.params.diagnostics) do
         diag.relatedInformation = nil
@@ -101,7 +99,7 @@ function LSPClient:did_open(buffer)
   if self.seen then return end
   self.seen = true
   self.initialized:wait()
-  local uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
+  local uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
   local lines = vim._vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
   local text = table.concat(lines, "\n")
   if vim._vim.api.nvim_buf_get_option(buffer, 'eol') then
@@ -131,7 +129,7 @@ function LSPClient:did_change(change)
   local length = (self.is_utf8 and change.bytes) or change.units
   self.jsonrpc:notify("textDocument/didChange", {
     textDocument = {
-      uri = LSPUtil.uri_of_path(P(vim._vim.api.nvim_buf_get_name(change.buffer))),
+      uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(change.buffer))),
       version = change.tick
     },
     contentChanges = {
@@ -195,5 +193,7 @@ end
 
 return {
   LSPClient = LSPClient,
-  LSPUtil = LSPUtil,
+  current_text_document_position = current_text_document_position,
+  uri_of_path = uri_of_path,
+  uri_to_path = uri_to_path,
 }

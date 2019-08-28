@@ -18,7 +18,7 @@ end
 
 local function definition()
   async.task(function()
-    local service = LanguageService:get()
+    local service = LanguageService:get { type = 'lsp' }
     if not service then
       report_error "no LSP found for this buffer"
       return
@@ -46,7 +46,7 @@ end
 
 local function type_definition()
   async.task(function()
-    local service = LanguageService:get()
+    local service = LanguageService:get { type = 'lsp' }
     if not service then
       report_error "no LSP found for this buffer"
       return
@@ -74,7 +74,7 @@ end
 
 local function hover()
   async.task(function()
-    local service = LanguageService:get()
+    local service = LanguageService:get { type = 'lsp' }
     if not service then
       report_error "no LSP found for this buffer"
       return

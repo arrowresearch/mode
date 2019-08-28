@@ -31,7 +31,7 @@ function LanguageService:configure_linter(config)
   end
 end
 
-function LanguageService:get_lsp(config)
+function LanguageService:lsp_for_config(config)
   local filename = path.split(vim.call.expand("%:p"))
   local root = config.root(filename)
   if not root then
@@ -55,7 +55,7 @@ function LanguageService:get_lsp(config)
   return service
 end
 
-function LanguageService:get_linter(config)
+function LanguageService:linter_for_config(config)
   local filename = path.split(vim.call.expand("%:p"))
   local root = config.root(filename)
   if not root then
@@ -85,17 +85,22 @@ function LanguageService:get_linter(config)
   return service
 end
 
-function LanguageService:get()
+function LanguageService:get(o)
+  o = o or {type = nil}
   local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
   local config = self._config_by_filetype[filetype]
   if not config then
     return
   end
 
+  if o.type and o.type ~= config.type then
+    return nil
+  end
+
   if config.type == 'lsp' then
-    return self:get_lsp(config.config)
+    return self:lsp_for_config(config.config)
   elseif config.type == 'linter' then
-    return self:get_linter(config.config)
+    return self:linter_for_config(config.config)
   else
     assert(false, "Unknown language service type: " .. config.type)
   end
