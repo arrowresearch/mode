@@ -24,7 +24,7 @@ local function definition()
       return
     end
 
-    local params = lsp.LSPUtil.current_text_document_position()
+    local params = lsp.current_text_document_position()
     local resp = service.jsonrpc:request("textDocument/definition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -32,7 +32,7 @@ local function definition()
 
     local pos = resp.result[1]
     local uri = pos.uri
-    local filename = lsp.LSPUtil.uri_to_path(pos.uri)
+    local filename = lsp.uri_to_path(pos.uri)
 
     if uri ~= params.textDocument.uri then
       vim.execute([[edit %s]], filename.string)
@@ -52,7 +52,7 @@ local function type_definition()
       return
     end
 
-    local params = lsp.LSPUtil.current_text_document_position()
+    local params = lsp.current_text_document_position()
     local resp = service.jsonrpc:request("textDocument/typeDefinition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -60,7 +60,7 @@ local function type_definition()
 
     local pos = resp.result[1]
     local uri = pos.uri
-    local filename = lsp.LSPUtil.uri_to_path(pos.uri)
+    local filename = lsp.uri_to_path(pos.uri)
 
     if uri ~= params.textDocument.uri then
       vim.execute([[edit %s]], filename.string)
@@ -80,11 +80,11 @@ local function hover()
       return
     end
 
-    local pos = lsp.LSPUtil.current_text_document_position()
+    local pos = lsp.current_text_document_position()
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
     -- Check that we are at the same position
-    local next_pos = lsp.LSPUtil.current_text_document_position()
+    local next_pos = lsp.current_text_document_position()
     if next_pos ~= pos then
       return
     end

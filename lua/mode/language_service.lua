@@ -43,8 +43,8 @@ function LanguageService:lsp_for_config(config)
     return
   end
 
-  local id = root.string
-  local service = self._by_root[id]
+  local services = self._by_root[root.string] or {}
+  local service = services[config.id]
   if service then
     return service
   end
@@ -56,7 +56,8 @@ function LanguageService:lsp_for_config(config)
     cmd = cmd,
     args = args
   }
-  self._by_root[id] = service
+  self._by_root[root.string] = self._by_root[root.string] or {}
+  self._by_root[root.string][config.id] = service
   return service
 end
 
@@ -67,8 +68,8 @@ function LanguageService:linter_for_config(config)
     return
   end
 
-  local id = root.string
-  local service = self._by_root[id]
+  local services = self._by_root[root.string] or {}
+  local service = services[config.id]
   if service then
     return service
   end
@@ -86,7 +87,9 @@ function LanguageService:linter_for_config(config)
     end
     diagnostics:update()
   end)
-  self._by_root[id] = service
+
+  self._by_root[root.string] = self._by_root[root.string] or {}
+  self._by_root[root.string][config.id] = service
   return service
 end
 
@@ -124,16 +127,11 @@ function LanguageService:get(o)
   return service
 end
 
-function LanguageService:shutdown(id)
-  local service = self._by_root[id]
-  self._by_root[id] = nil
-  assert(service, 'LanguageService.shutdown: unable to find server')
-  service:shutdown()
-end
-
 function LanguageService:shutdown_all()
-  for id, _ in pairs(self._by_root) do
-    self:shutdown(id)
+  for _, services in pairs(self._by_root) do
+    for _, service in pairs(services) do
+      service:shutdown()
+    end
   end
 end
 
