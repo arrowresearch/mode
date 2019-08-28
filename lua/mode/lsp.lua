@@ -48,10 +48,11 @@ end
 local LSPClient = util.Object:extend()
 
 function LSPClient:init(o)
-  self.seen = false
   self.jsonrpc = o.jsonrpc
   self.root = o.root
   self.languageId = o.languageId
+
+  self.buffers = {}
   self.is_insert_mode = false
   self.is_utf8 = nil
 
@@ -96,8 +97,6 @@ function LSPClient:init(o)
 end
 
 function LSPClient:did_open(buffer)
-  if self.seen then return end
-  self.seen = true
   self.initialized:wait()
   local uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
   local lines = vim._vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
@@ -113,12 +112,25 @@ function LSPClient:did_open(buffer)
       languageId = self.languageId,
     }
   })
-  BufferWatcher:new {
+  local watcher = BufferWatcher:new {
     buffer = buffer,
     is_utf8 = self.is_utf8,
-  }.updates:subscribe(function(change)
+  }
+  watcher.updates:subscribe(function(change)
     self:did_change(change)
   end)
+  self.buffers[buffer] = { watcher = watcher, buffer = buffer }
+end
+
+function LSPClient:did_close(buffer)
+  local record = self.buffers[buffer]
+  if record then
+    record.watcher:shutdown()
+  end
+  local uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
+  self.jsonrpc:notify("textDocument/didClose", {
+    textDocument = { uri = uri }
+  })
 end
 
 function LSPClient:did_change(change)

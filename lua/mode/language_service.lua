@@ -148,6 +148,10 @@ vim.autocommand.register {
   pattern = '*',
   action = function(ev)
     async.task(function()
+      local service = LanguageService:get { buffer = ev.buffer }
+      if service then
+        service:did_close(ev.buffer)
+      end
       LanguageService._by_buffer[ev.buffer] = nil
     end)
   end

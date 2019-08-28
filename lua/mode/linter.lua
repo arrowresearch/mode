@@ -111,13 +111,24 @@ function Linter:did_open(buffer)
   self:_run(buffer)
 end
 
+function Linter:_shutdown_buffer(buffer_info)
+  if buffer_info.proc then
+    buffer_info.proc:shutdown()
+  end
+  buffer_info.watcher:shutdown()
+  buffer_info.stop_updates()
+end
+
+function Linter:did_close(buffer)
+  local buffer_info = self._buffers[buffer]
+  if buffer_info then
+    self:_shutdown_buffer(buffer_info)
+  end
+end
+
 function Linter:shutdown()
   for _, buffer_info in pairs(self._buffers) do
-    if buffer_info.proc then
-      buffer_info.proc:shutdown()
-    end
-    buffer_info.watcher:shutdown()
-    buffer_info.stop_updates()
+    self:_shutdown_buffer(buffer_info)
   end
 end
 
