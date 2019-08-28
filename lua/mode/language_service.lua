@@ -21,12 +21,16 @@ local LanguageService = {
 }
 
 function LanguageService:configure_lsp(config)
+  assert(config.id, 'missing id')
+  assert(config.id, 'missing filetype')
   for _, filetype in ipairs(toarray(config.filetype)) do
     self._config_by_filetype[filetype] = {type = 'lsp', config = config}
   end
 end
 
 function LanguageService:configure_linter(config)
+  assert(config.id, 'missing id')
+  assert(config.id, 'missing filetype')
   for _, filetype in ipairs(toarray(config.filetype)) do
     self._config_by_filetype[filetype] = {type = 'linter', config = config}
   end
