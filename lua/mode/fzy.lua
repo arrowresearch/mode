@@ -1,4 +1,5 @@
 local vim = require 'mode.vim'
+local Modal = require 'mode.modal'
 
 local function run(o)
   assert(o.cmd, 'missing command')
@@ -33,6 +34,8 @@ local function run(o)
   vim.execute [[
     startinsert
   ]]
+
+  Modal:close()
 
   local prompt = o.prompt or '> '
   vim.termopen({

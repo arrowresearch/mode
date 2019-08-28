@@ -8,7 +8,7 @@ local diagnostics = require 'mode.diagnostics'
 local LanguageService = require 'mode.language_service'
 local lsp = require 'mode.lsp'
 local Position = require 'mode.position'
-local modal = require 'mode.modal'
+local Modal = require 'mode.modal'
 local P = path.split
 
 local function report_error(msg, ...)
@@ -73,6 +73,8 @@ local function type_definition()
 end
 
 local function hover()
+  local buffer = vim.call.expand('%')
+  local pos = lsp.current_text_document_position()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
     if not service then
@@ -80,7 +82,6 @@ local function hover()
       return
     end
 
-    local pos = lsp.current_text_document_position()
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
     -- Check that we are at the same position
@@ -104,7 +105,7 @@ local function hover()
         message = contents.value
       end
     end
-    modal:open(message)
+    Modal:open(buffer, message)
   end)
 end
 
@@ -156,8 +157,8 @@ local function next_diagnostic_location(o)
   end
 end
 
-local function current_diagnostic()
-  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+local function current_diagnostic(buffer)
+  local filename = P(vim._vim.api.nvim_buf_get_name(buffer))
   local cur = Position:current()
   local items = diagnostics:get(filename)
   for i = 1, #items do
@@ -184,16 +185,20 @@ local function current_diagnostic()
 end
 
 vim.autocommand.register {
-  event = {vim.autocommand.CursorMoved},
+  event = {
+    vim.autocommand.CursorMoved,
+    vim.autocommand.BufEnter,
+    vim.autocommand.WinEnter,
+  },
   pattern = '*',
-  action = function()
+  action = function(ev)
     async.task(function()
       local mode = vim._vim.api.nvim_get_mode().mode
-      local diag = current_diagnostic()
+      local diag = current_diagnostic(ev.buffer)
       if diag and mode:sub(1, 1) == 'n' then
-        modal:open(diag.message)
+        Modal:open(ev.buffer, diag.message)
       else
-        modal:close()
+        Modal:close()
       end
     end)
   end
