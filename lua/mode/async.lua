@@ -5,6 +5,60 @@
 local util = require 'mode.util'
 local LinkedList = util.LinkedList
 
+-- Coroutine utils
+--
+-- This code is borrowed from https://github.com/bartbes/co2 and is licensed
+-- under BSD-3 license.
+
+local function strip_traceback_header(traceback)
+  return traceback:gsub("^.-\n", "")
+end
+
+local function traceback(coro, level)
+  level = level or 0
+
+  local parts = {}
+
+  if coro then
+    table.insert(parts, debug.traceback(coro))
+  end
+
+  -- Note: for some reason debug.traceback needs a string to pass a level
+  -- But if you pass a string it adds a newline
+  table.insert(parts, debug.traceback("", 2 + level):sub(2))
+
+  for i = 2, #parts do
+    parts[i] = strip_traceback_header(parts[i])
+  end
+
+  return table.concat(parts, "\n\t-- coroutine boundary --\n")
+end
+
+local function xpresume(coro, handler, ...)
+  local function dispatch(status, maybe_err, ...)
+    if status then
+      return true, maybe_err, ...
+    else
+      return false, handler(maybe_err, coro)
+    end
+  end
+
+  return dispatch(coroutine.resume(coro, ...))
+end
+
+local function generic_error_handler(msg, coro)
+  msg = string.format(
+    "Coroutine failure: %s\n\nCoroutine %s",
+    msg,
+    traceback(coro)
+  )
+  error(msg)
+end
+
+local function resume(coro, ...)
+  return select(2, xpresume(coro, generic_error_handler, ...))
+end
+
 -- Channel
 
 local Channel = util.Object:extend()
@@ -28,7 +82,7 @@ function Channel:wait_next()
   -- luacheck: push ignore unused unsubscribe
   local unsubscribe = self:subscribe(function(value)
     unsubscribe()
-    assert(coroutine.resume(running, value))
+    resume(running, value)
   end)
   -- luacheck: pop
 end
@@ -89,7 +143,7 @@ function Future:wait()
     local running = coroutine.running()
     assert(running, 'Should be called from a coroutine')
     self:subscribe(function(value)
-      assert(coroutine.resume(running, value))
+      resume(running, value)
     end)
     return coroutine.yield()
   end
@@ -128,7 +182,7 @@ function Task:init(f)
     f()
     self.completed:put()
   end)
-  assert(coroutine.resume(self.coro))
+  resume(self.coro)
 end
 
 function Task:wait()
