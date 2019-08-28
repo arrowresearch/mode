@@ -51,9 +51,13 @@ function Diagnostics:update_for_buffer(buffer)
     self.use_highlights:clear(buffer)
   end
   for _, item in ipairs(items) do
+    local hlgroup = 'ModeError'
+    if item.kind == 'W' then
+      hlgroup = 'ModeWarning'
+    end
     if self.use_highlights then
       self.use_highlights:add {
-        hlgroup = 'ModeError',
+        hlgroup = hlgroup,
         buffer = buffer,
         range = item.range,
       }
@@ -97,8 +101,12 @@ function Diagnostics:update()
         }
       end
       if self.use_highlights and buffer_loaded then
+        local hlgroup = 'ModeError'
+        if item.kind == 'W' then
+          hlgroup = 'ModeWarning'
+        end
         self.use_highlights:add {
-          hlgroup = 'ModeError',
+          hlgroup = hlgroup,
           buffer = buffer,
           range = item.range,
         }
@@ -108,7 +116,7 @@ function Diagnostics:update()
         lnum = item.range.start.line + 1,
         col = item.range.start.character + 1,
         text = item.message,
-        type = 'E',
+        type = item.kind,
       })
     end
   end
