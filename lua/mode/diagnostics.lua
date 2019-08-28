@@ -10,10 +10,17 @@ local Diagnostics = {
   use_highlights = highlights.Highlights:new {
     name = 'mode-diag-highlights'
   },
-  use_signs = signs.Signs:new {
-    name = 'mode-diag',
+  use_errors_signs = signs.Signs:new {
+    name = 'mode-diag-errors',
     text = '✖',
-    texthl = 'Error',
+    texthl = 'ModeError',
+    priority = 100,
+  },
+  use_warnings_signs = signs.Signs:new {
+    name = 'mode-diag-warnings',
+    text = '✖',
+    texthl = 'ModeWarning',
+    priority = 90,
   },
   updated = false,
   by_filename = {}
@@ -62,8 +69,13 @@ function Diagnostics:update_for_buffer(buffer)
         range = item.range,
       }
     end
-    if self.use_signs then
-      self.use_signs:place {
+    if self.use_warnings_signs and item.kind == 'W' then
+      self.use_warnings_signs:place {
+        buffer = buffer,
+        line = item.range.start.line,
+      }
+    elseif self.use_errors_signs then
+      self.use_errors_signs:place {
         buffer = buffer,
         line = item.range.start.line,
       }
@@ -76,8 +88,11 @@ function Diagnostics:update()
     return
   end
   -- TODO(andreypopp): set signs per file
-  if self.use_signs then
-    self.use_signs:unplace_all()
+  if self.use_warnings_signs then
+    self.use_warnings_signs:unplace_all()
+  end
+  if self.use_errors_signs then
+    self.use_errors_signs:unplace_all()
   end
   if self.use_quickfix_list then
     vim.call.setqflist({}, 'r')
@@ -94,11 +109,18 @@ function Diagnostics:update()
     end
 
     for _, item in ipairs(items) do
-      if self.use_signs and buffer_loaded then
-        self.use_signs:place {
-          buffer = buffer,
-          line = item.range.start.line,
-        }
+      if buffer_loaded then
+        if self.use_warnings_signs and item.kind == 'W' then
+          self.use_warnings_signs:place {
+            buffer = buffer,
+            line = item.range.start.line,
+          }
+        elseif self.use_errors_signs then
+          self.use_errors_signs:place {
+            buffer = buffer,
+            line = item.range.start.line,
+          }
+        end
       end
       if self.use_highlights and buffer_loaded then
         local hlgroup = 'ModeError'
