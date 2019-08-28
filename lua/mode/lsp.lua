@@ -1,5 +1,6 @@
 local util = require 'mode.util'
 local uv = require 'mode.uv'
+local async = require 'mode.async'
 local jsonrpc = require 'mode.jsonrpc'
 local Position = require 'mode.position'
 local diagnostics = require 'mode.diagnostics'
@@ -54,6 +55,9 @@ function LSPClient:init(o)
   self.languageId = o.languageId
   self.is_insert_mode = false
   self.is_utf8 = nil
+
+  self.on_shutdown = async.Channel:new()
+
   self.capabilities = {
     textDocument = {
       publishDiagnostics = true,
@@ -154,92 +158,38 @@ function LSPClient:did_insert_leave(_)
   diagnostics:update()
 end
 
-function LSPClient:shutdown()
-  self.jsonrpc:request("shutdown", nil)
-  self.jsonrpc:notify("exit", nil)
-  self.jsonrpc:stop()
-end
-
-local LSP = {
-  LSPClient = LSPClient,
-  LSPUtil = LSPUtil,
-  _by_root = {},
-  _config_by_filetype = {},
-}
-
-function LSP:configure(config)
-  local filetypes
-  if util.table_is_array(config.filetype) then
-    filetypes = config.filetype
-  else
-    filetypes = {config.filetype}
-  end
-  for _, filetype in ipairs(filetypes) do
-    self._config_by_filetype[filetype] = config
-  end
-end
-
-function LSP:start(id, config)
+function LSPClient:start(config)
   -- check if we have client running for the id
-  local lsp = self._by_root[id]
-  if lsp then
-    return lsp.client
-  end
-
-  local proc = uv.Process:new({
+  local proc = uv.Process:new {
     cmd = config.cmd,
     args = config.args
-  })
+  }
 
-  local client = self.LSPClient:new({
+  local client = self:new {
     root = config.root,
     languageId = config.languageId,
-    jsonrpc = jsonrpc.JSONRPCClient:new({
+    jsonrpc = jsonrpc.JSONRPCClient:new {
       stream_input = proc.stdout,
       stream_output = proc.stdin
-    })
-  })
+    }
+  }
 
-  -- vim.show("LSP started")
-
-  self._by_root[id] = {client = client, proc = proc}
+  client.on_shutdown:subscribe(function()
+    proc:shutdown()
+  end)
 
   return client
 end
 
-function LSP:get_for_current_buffer()
-  local filetype = vim._vim.api.nvim_buf_get_option(0, 'filetype')
-  local config = self._config_by_filetype[filetype]
-  if not config then
-    return
-  end
-  local filename = P(vim.call.expand("%:p"))
-  local root = config.root(filename)
-  if not root then
-    return
-  end
-  local cmd, args = config.command(root)
-  local id = root.string
-  return self:start(id, {
-    languageId = config.languageId,
-    root = root,
-    cmd = cmd,
-    args = args
-  })
+
+function LSPClient:shutdown()
+  self.jsonrpc:request("shutdown", nil)
+  self.jsonrpc:notify("exit", nil)
+  self.jsonrpc:stop()
+  self.on_shutdown:put(true)
 end
 
-function LSP:shutdown(id)
-  local lsp = self._by_root[id]
-  self._by_root[id] = nil
-  assert(lsp, 'LSP.shutdown: unable to find server')
-  lsp.client:shutdown()
-  lsp.proc:shutdown()
-end
-
-function LSP:shutdown_all()
-  for id, _ in pairs(self._by_root) do
-    self:shutdown(id)
-  end
-end
-
-return LSP
+return {
+  LSPClient = LSPClient,
+  LSPUtil = LSPUtil,
+}
