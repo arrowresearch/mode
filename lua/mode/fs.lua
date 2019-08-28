@@ -18,7 +18,7 @@ function exports.find_closest_ancestor(p, predicate)
   if nextp == nil then
     return nil
   else
-    return exports.find_up_by(nextp, predicate)
+    return exports.find_closest_ancestor(nextp, predicate)
   end
 end
 
