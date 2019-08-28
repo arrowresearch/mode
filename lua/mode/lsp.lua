@@ -23,16 +23,16 @@ function TextDocumentPosition.__eq(a, b)
   return a.textDocument.uri == b.textDocument.uri and a.position == b.position
 end
 
-function uri_of_path(p)
+local function uri_of_path(p)
   return "file://" .. p.string
 end
 
-function uri_to_path(uri)
+local function uri_to_path(uri)
   -- strips file:// prefix
   return P(string.sub(uri, 8))
 end
 
-function current_text_document_position()
+local function current_text_document_position()
   local pos = vim.call.getpos('.')
   local lnum = pos[2]
   local col = pos[3]
