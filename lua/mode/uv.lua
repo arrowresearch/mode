@@ -8,9 +8,26 @@ local util = require 'mode.util'
 local path = require 'mode.path'
 local async = require 'mode.async'
 
+-- Timer
+
+local function sleep(delay)
+  local resp = async.Future:new()
+  local timer = uv.new_timer()
+  uv.timer_start(timer, delay, 0, function ()
+    uv.timer_stop(timer)
+    uv.close(timer)
+    resp:put()
+  end)
+  return resp
+end
+
 -- Stream
 
 local Stream = util.Object:extend()
+
+function Stream:init()
+  self.is_shutdown = false
+end
 
 function Stream:write(data)
   local status = async.Future:new()
@@ -61,9 +78,14 @@ end
 
 function Stream:shutdown()
   local resp = async.Future:new()
-  uv.shutdown(self.handle, function()
+  if self.handle and not self.is_shutdown then
+    self.is_shutdown = true
+    uv.shutdown(self.handle, function()
+      resp:put(nil)
+    end)
+  else
     resp:put(nil)
-  end)
+  end
   return resp
 end
 
@@ -134,5 +156,6 @@ end
 return {
   Pipe = Pipe,
   Process = Process,
+  sleep = sleep,
   _uv = uv,
 }
