@@ -18,7 +18,7 @@ end
 
 function Signs:place(sign)
   local res = vim.call.sign_place(
-    0, self.name, self.name, sign.buffer,
+    0, self.name, self.name, sign.buffer.id,
     {lnum = sign.line + 1, priority = sign.priority or 100}
   )
   assert(res ~= -1, 'Signs.place: unable to place sign')

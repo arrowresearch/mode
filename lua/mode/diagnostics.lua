@@ -81,7 +81,7 @@ function Diagnostics:update_for_buffer(buffer)
   end
   local items = data.items
   if self.use_highlights then
-    self.use_highlights:clear(buffer.id)
+    self.use_highlights:clear(buffer)
   end
   for _, item in ipairs(items) do
     local hlgroup = 'ModeError'
@@ -91,18 +91,18 @@ function Diagnostics:update_for_buffer(buffer)
     if self.use_highlights then
       self.use_highlights:add {
         hlgroup = hlgroup,
-        buffer = buffer.id,
+        buffer = buffer,
         range = item.range,
       }
     end
     if self.use_warnings_signs and item.kind == 'W' then
       self.use_warnings_signs:place {
-        buffer = buffer.id,
+        buffer = buffer,
         line = item.range.start.line,
       }
     elseif self.use_errors_signs then
       self.use_errors_signs:place {
-        buffer = buffer.id,
+        buffer = buffer,
         line = item.range.start.line,
       }
     end
@@ -131,19 +131,19 @@ function Diagnostics:update()
     local buffer_loaded = buffer ~= nil
 
     if buffer_loaded and self.use_highlights then
-      self.use_highlights:clear(buffer.id)
+      self.use_highlights:clear(buffer)
     end
 
     for _, item in ipairs(data.items) do
       if buffer_loaded then
         if self.use_warnings_signs and item.kind == 'W' then
           self.use_warnings_signs:place {
-            buffer = buffer.id,
+            buffer = buffer,
             line = item.range.start.line,
           }
         elseif self.use_errors_signs then
           self.use_errors_signs:place {
-            buffer = buffer.id,
+            buffer = buffer,
             line = item.range.start.line,
           }
         end
@@ -155,7 +155,7 @@ function Diagnostics:update()
         end
         self.use_highlights:add {
           hlgroup = hlgroup,
-          buffer = buffer.id,
+          buffer = buffer,
           range = item.range,
         }
       end
