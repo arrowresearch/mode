@@ -19,10 +19,6 @@ function Modal:open(buffer, message)
   for line in string.gmatch(message, '([^\n\r]+)') do
     table.insert(lines, line)
   end
-  for _ = #lines, size - 2 do
-    table.insert(lines, '')
-  end
-  table.insert(lines, sep)
   vim._vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   local fwin = vim._vim.api.nvim_open_win(buf, false, {
     relative = 'win',
