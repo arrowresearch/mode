@@ -65,13 +65,19 @@ local function make_buffer_options_proxy(id)
   return t
 end
 
+function Buffer.__eq(a, b)
+  return a.id == b.id
+end
+
 function Buffer:init(id)
   self.id = id
   self.options = make_buffer_options_proxy(id)
 end
 
-function Buffer.__eq(a, b)
-  return a.id == b.id
+function Buffer:create(o)
+  o = o or {listed = true, scratch = false}
+  local id = vim.api.nvim_create_buf(o.listed, o.scratch)
+  return self:new(id)
 end
 
 function Buffer:get_or_nil(id)

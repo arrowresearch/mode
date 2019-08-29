@@ -13,14 +13,14 @@ function Modal:open(buffer, message)
   local width = vim._vim.api.nvim_win_get_width(win)
   local height = vim._vim.api.nvim_win_get_height(win)
   local size = 6
-  local buf = vim._vim.api.nvim_create_buf(false, true)
+  local buffer = vim.Buffer:create { listed = false, scratch = true }
   local sep = string.rep("━", width)
   local lines = {sep}
   for line in string.gmatch(message, '([^\n\r]+)') do
     table.insert(lines, line)
   end
-  vim._vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  local fwin = vim._vim.api.nvim_open_win(buf, false, {
+  vim._vim.api.nvim_buf_set_lines(buffer.id, 0, -1, false, lines)
+  local fwin = vim._vim.api.nvim_open_win(buffer.id, false, {
     relative = 'win',
     style = 'minimal',
     height = size,
