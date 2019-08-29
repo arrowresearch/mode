@@ -47,6 +47,8 @@ end
 
 local LSPClient = util.Object:extend()
 
+LSPClient.type = "lsp"
+
 function LSPClient:init(o)
   self.jsonrpc = o.jsonrpc
   self.root = o.root
@@ -170,6 +172,8 @@ function LSPClient:did_insert_leave(_)
   self.is_insert_mode = false
   diagnostics:update()
 end
+
+function LSPClient.did_buffer_enter(_) end
 
 function LSPClient:start(config)
   -- check if we have client running for the id

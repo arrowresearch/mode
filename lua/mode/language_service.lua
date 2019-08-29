@@ -83,7 +83,7 @@ function LanguageService:linter_for_config(config)
   }
   service.diagnostics:subscribe(function(reports)
     for _, report in ipairs(reports) do
-      diagnostics:set(filename, report.items)
+      diagnostics:set(report.filename, report.items)
     end
     diagnostics:update()
   end)
@@ -102,6 +102,9 @@ function LanguageService:get(o)
 
   service = self._by_buffer[buffer.id]
   if service then
+    if type and type ~= service.type then
+      return nil
+    end
     return service
   end
 
@@ -180,6 +183,21 @@ vim.autocommand.register {
       if service then
         async.task(function()
           service:did_insert_enter(ev.buffer)
+        end)
+      end
+    end)
+  end
+}
+
+vim.autocommand.register {
+  event = vim.autocommand.BufEnter,
+  pattern = '*',
+  action = function(ev)
+    async.task(function()
+      local service = LanguageService:get { buffer = ev.buffer }
+      if service then
+        async.task(function()
+          service:did_buffer_enter(ev.buffer)
         end)
       end
     end)

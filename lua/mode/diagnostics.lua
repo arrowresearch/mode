@@ -160,7 +160,7 @@ function Diagnostics:update()
         }
       end
       table.insert(qf, {
-        filename = item.filename.string,
+        filename = filename,
         lnum = item.range.start.line + 1,
         col = item.range.start.character + 1,
         text = item.message,

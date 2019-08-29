@@ -6,6 +6,8 @@ local BufferWatcher = require 'mode.buffer_watcher'
 
 local Linter = util.Object:extend()
 
+Linter.type = "linter"
+
 function Linter:init(o)
   self.cmd = o.cmd
   self.args = o.args
@@ -36,12 +38,15 @@ function Linter:_run(buffer)
     return
   end
 
+  vim.wait()
+  local filename = buffer:filename()
+
   local this_tick = buffer_info.tick_queued
   buffer_info.tick = this_tick
 
   local args = {}
   for _, arg in ipairs(self.args) do
-    arg = arg:gsub("%%{FILENAME}%%", buffer_info.filename.string)
+    arg = arg:gsub("%%{FILENAME}%%", filename.string)
     table.insert(args, arg)
   end
 
@@ -71,7 +76,7 @@ function Linter:_run(buffer)
       table.insert(items, item)
     end
   end
-  self.diagnostics:put({{filename = buffer_info.filename, items = items}})
+  self.diagnostics:put({{filename = filename, items = items}})
   -- shutdown proc
   proc:shutdown()
 end
@@ -79,6 +84,10 @@ end
 function Linter.did_insert_enter() end
 
 function Linter:did_insert_leave(buffer)
+  self:_run(buffer)
+end
+
+function Linter:did_buffer_enter(buffer)
   self:_run(buffer)
 end
 
@@ -98,7 +107,6 @@ function Linter:did_open(buffer)
   local watcher = BufferWatcher:new { buffer = buffer }
   vim.wait()
   local buffer_info = {
-    filename = buffer:filename(),
     tick = -1,
     tick_queued = 0,
     watcher = watcher,
