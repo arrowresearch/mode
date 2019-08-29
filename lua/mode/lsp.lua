@@ -36,7 +36,7 @@ local function current_text_document_position()
   local pos = vim.call.getpos('.')
   local lnum = pos[2]
   local col = pos[3]
-  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local filename = vim.Buffer:current():filename()
   local uri = uri_of_path(filename)
   return TextDocumentPosition:new {
     uri = uri,
@@ -98,17 +98,17 @@ end
 
 function LSPClient:did_open(buffer)
   self.initialized:wait()
-  local uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
-  local lines = vim._vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  local uri = uri_of_path(buffer:filename())
+  local lines = buffer:lines(0, -1)
   local text = table.concat(lines, "\n")
-  if vim._vim.api.nvim_buf_get_option(buffer, 'eol') then
+  if buffer.options.eol then
     text = text..'\n'
   end
   self.jsonrpc:notify("textDocument/didOpen", {
     textDocument = {
       uri = uri,
       text = text,
-      version = vim._vim.api.nvim_buf_get_changedtick(buffer),
+      version = buffer:changedtick(),
       languageId = self.languageId,
     }
   })
@@ -119,15 +119,15 @@ function LSPClient:did_open(buffer)
   watcher.updates:subscribe(function(change)
     self:did_change(change)
   end)
-  self.buffers[buffer] = { watcher = watcher, buffer = buffer }
+  self.buffers[buffer.id] = { watcher = watcher, buffer = buffer }
 end
 
 function LSPClient:did_close(buffer)
-  local record = self.buffers[buffer]
+  local record = self.buffers[buffer.id]
   if record then
     record.watcher:shutdown()
   end
-  local uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(buffer)))
+  local uri = uri_of_path(buffer:filename())
   self.jsonrpc:notify("textDocument/didClose", {
     textDocument = { uri = uri }
   })
@@ -135,13 +135,12 @@ end
 
 function LSPClient:did_change(change)
   self.initialized:wait()
-  local lines = vim._vim.api.nvim_buf_get_lines(
-    change.buffer, change.start, change.stopped, true)
+  local lines = change.buffer:lines(change.start, change.stopped)
   local text = table.concat(lines, "\n") .. ((change.stopped > change.start) and "\n" or "")
   local length = (self.is_utf8 and change.bytes) or change.units
   self.jsonrpc:notify("textDocument/didChange", {
     textDocument = {
-      uri = uri_of_path(P(vim._vim.api.nvim_buf_get_name(change.buffer))),
+      uri = uri_of_path(change.buffer:filename()),
       version = change.tick
     },
     contentChanges = {

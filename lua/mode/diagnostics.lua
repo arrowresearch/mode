@@ -23,16 +23,21 @@ local Diagnostics = {
     priority = 90,
   },
   updated = false,
-  by_filename = {}
+  by_filename = {},
+  empty_diagnostics = {
+    counts = {total = 0, errors = 0, warnings = 0},
+    items = {},
+  }
 }
 
 function Diagnostics:get(filename)
-  return self.by_filename[filename.string] or {}
+  return self.by_filename[filename.string] or self.empty_diagnostics
 end
 
 function Diagnostics:set(filename, items)
   items = items or {}
   items = util.array_copy(items)
+
   table.sort(items, function(a, b)
     if a.range.start.line < b.range.start.line then
       return true
@@ -45,17 +50,38 @@ function Diagnostics:set(filename, items)
       return false
     end
   end)
-  self.by_filename[filename.string] = items
+
+  local counts = {
+    total = 0,
+    warnings = 0,
+    errors = 0,
+  }
+
+  for _, item in ipairs(items) do
+    counts.total = counts.total + 1
+    if item.kind == 'W' then
+      counts.warnings = counts.warnings + 1
+    else
+      counts.errors = counts.errors + 1
+    end
+  end
+
+  self.by_filename[filename.string] = {
+    items = items,
+    counts = counts,
+  }
+
   self.updated = false
 end
 
 function Diagnostics:update_for_buffer(buffer)
-  local items = self.by_filename[vim._vim.api.nvim_buf_get_name(buffer)]
-  if not items then
+  local data = self.by_filename[buffer:filename().string]
+  if not data then
     return
   end
+  local items = data.items
   if self.use_highlights then
-    self.use_highlights:clear(buffer)
+    self.use_highlights:clear(buffer.id)
   end
   for _, item in ipairs(items) do
     local hlgroup = 'ModeError'
@@ -65,18 +91,18 @@ function Diagnostics:update_for_buffer(buffer)
     if self.use_highlights then
       self.use_highlights:add {
         hlgroup = hlgroup,
-        buffer = buffer,
+        buffer = buffer.id,
         range = item.range,
       }
     end
     if self.use_warnings_signs and item.kind == 'W' then
       self.use_warnings_signs:place {
-        buffer = buffer,
+        buffer = buffer.id,
         line = item.range.start.line,
       }
     elseif self.use_errors_signs then
       self.use_errors_signs:place {
-        buffer = buffer,
+        buffer = buffer.id,
         line = item.range.start.line,
       }
     end
@@ -100,24 +126,24 @@ function Diagnostics:update()
 
   local qf = {}
 
-  for filename, items in pairs(self.by_filename) do
-    local buffer = vim.call.bufnr(filename)
-    local buffer_loaded = buffer ~= -1
+  for filename, data in pairs(self.by_filename) do
+    local buffer = vim.Buffer:get_or_nil(filename)
+    local buffer_loaded = buffer ~= nil
 
-    if self.use_highlights then
-      self.use_highlights:clear(buffer)
+    if buffer_loaded and self.use_highlights then
+      self.use_highlights:clear(buffer.id)
     end
 
-    for _, item in ipairs(items) do
+    for _, item in ipairs(data.items) do
       if buffer_loaded then
         if self.use_warnings_signs and item.kind == 'W' then
           self.use_warnings_signs:place {
-            buffer = buffer,
+            buffer = buffer.id,
             line = item.range.start.line,
           }
         elseif self.use_errors_signs then
           self.use_errors_signs:place {
-            buffer = buffer,
+            buffer = buffer.id,
             line = item.range.start.line,
           }
         end
@@ -129,7 +155,7 @@ function Diagnostics:update()
         end
         self.use_highlights:add {
           hlgroup = hlgroup,
-          buffer = buffer,
+          buffer = buffer.id,
           range = item.range,
         }
       end

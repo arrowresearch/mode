@@ -96,17 +96,16 @@ end
 function LanguageService:get(o)
   o = o or {}
   local type = o.type
-  local buffer = o.buffer or vim.call.expand('%')
+  local buffer = o.buffer or vim.Buffer:current()
 
   local service
 
-  service = self._by_buffer[buffer]
+  service = self._by_buffer[buffer.id]
   if service then
     return service
   end
 
-  local filetype = vim._vim.api.nvim_buf_get_option(buffer, 'filetype')
-  local config = self._config_by_filetype[filetype]
+  local config = self._config_by_filetype[buffer.options.filetype]
   if not config then
     return
   end
@@ -123,7 +122,7 @@ function LanguageService:get(o)
     assert(false, "Unknown language service type: " .. config.type)
   end
 
-  self._by_buffer[buffer] = service
+  self._by_buffer[buffer.id] = service
   return service
 end
 
@@ -154,7 +153,7 @@ vim.autocommand.register {
       if service then
         service:did_close(ev.buffer)
       end
-      LanguageService._by_buffer[ev.buffer] = nil
+      LanguageService._by_buffer[ev.buffer.id] = nil
     end)
   end
 }

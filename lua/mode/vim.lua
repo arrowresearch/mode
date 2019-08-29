@@ -4,6 +4,7 @@
 --
 
 local util = require 'mode.util'
+local path = require 'mode.path'
 local async = require 'mode.async'
 
 -- Wait for VIM API to be available.
@@ -46,6 +47,66 @@ setmetatable(call, call_meta)
 
 local function execute(cmd, ...)
   vim.api.nvim_command(string.format(cmd, ...))
+end
+
+--
+-- Wrap buffer API
+--
+
+local Buffer = util.Object:extend()
+
+local function make_buffer_options_proxy(id)
+  local t = {}
+  setmetatable(t, {
+    __index = function(_, k)
+      return vim.api.nvim_buf_get_option(id, k)
+    end
+  })
+  return t
+end
+
+function Buffer:init(id)
+  self.id = id
+  self.options = make_buffer_options_proxy(id)
+end
+
+function Buffer.__eq(a, b)
+  return a.id == b.id
+end
+
+function Buffer:get_or_nil(id)
+  if type(id) == "string" then
+    id = call.bufnr(id)
+  end
+  if not vim.api.nvim_buf_is_valid(id) then
+    return nil
+  end
+  return self:new(id)
+end
+
+function Buffer:get(id)
+  local buf = self:get_or_nil(id)
+  assert(buf, 'Invalid buffer id')
+  return buf
+end
+
+function Buffer:current()
+  return self:new(vim.api.nvim_get_current_buf())
+end
+
+function Buffer:filename()
+  return path.split(vim.api.nvim_buf_get_name(self.id))
+end
+
+function Buffer:changedtick()
+  return vim.api.nvim_buf_get_changedtick(self.id)
+end
+
+function Buffer:lines(start, stop, strict_indexing)
+  start = start == nil and 0 or start
+  stop = stop == nil and -1 or stop
+  strict_indexing = strict_indexing == nil and true or false
+  return vim.api.nvim_buf_get_lines(self.id, start, stop, strict_indexing)
 end
 
 --
@@ -210,7 +271,7 @@ function autocommand._trigger(id)
   assert(cb ~= nil, 'Unknown autocommand id')
   cb {
     filename = call.expand('<afile>'),
-    buffer = tonumber(call.expand('<abuf>')),
+    buffer = Buffer:new(tonumber(call.expand('<abuf>'))),
   }
 end
 
@@ -261,6 +322,7 @@ end
 
 return {
   _vim = vim,
+  Buffer = Buffer,
   call = call,
   execute = execute,
   wait = wait,

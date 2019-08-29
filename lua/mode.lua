@@ -1,7 +1,6 @@
 -- luacheck: globals vim string
 
 local util = require 'mode.util'
-local path = require 'mode.path'
 local vim = require 'mode.vim'
 local async = require 'mode.async'
 local diagnostics = require 'mode.diagnostics'
@@ -9,7 +8,6 @@ local LanguageService = require 'mode.language_service'
 local lsp = require 'mode.lsp'
 local Position = require 'mode.position'
 local Modal = require 'mode.modal'
-local P = path.split
 
 local function report_error(msg, ...)
   msg = string.format(msg, ...)
@@ -73,7 +71,7 @@ local function type_definition()
 end
 
 local function hover()
-  local buffer = vim.call.expand('%')
+  local buffer = vim.Buffer:current()
   local pos = lsp.current_text_document_position()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
@@ -111,8 +109,8 @@ end
 
 local function prev_diagnostic_location(o)
   o = o or {wrap = true}
-  local filename = P(vim._vim.api.nvim_buf_get_name(0))
-  local items = diagnostics:get(filename)
+  local filename = vim.Buffer:current():filename()
+  local items = diagnostics:get(filename).items
   local cur = Position:current()
   local found = nil
   for i = #items, 1, -1 do
@@ -135,9 +133,9 @@ end
 
 local function next_diagnostic_location(o)
   o = o or {wrap = true}
-  local filename = P(vim._vim.api.nvim_buf_get_name(0))
+  local filename = vim.Buffer:current():filename()
   local cur = Position:current()
-  local items = diagnostics:get(filename)
+  local items = diagnostics:get(filename).items
   local found = nil
   for i = 1, #items do
     local start = items[i].range.start
@@ -158,9 +156,9 @@ local function next_diagnostic_location(o)
 end
 
 local function current_diagnostic(buffer)
-  local filename = P(vim._vim.api.nvim_buf_get_name(buffer))
+  local filename = buffer:filename()
   local cur = Position:current()
-  local items = diagnostics:get(filename)
+  local items = diagnostics:get(filename).items
   for i = 1, #items do
     local item = items[i]
     local start, stop = item.range.start, item.range['end']
@@ -205,6 +203,10 @@ vim.autocommand.register {
 }
 
 return {
+  diagnostics_count = function()
+    local filename = vim.Buffer:current():filename()
+    return diagnostics:get(filename).counts
+  end,
   configure_lsp = function(config)
     LanguageService:configure_lsp(config)
   end,

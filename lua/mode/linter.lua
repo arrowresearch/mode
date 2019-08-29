@@ -29,7 +29,7 @@ function Linter:_queue_run(buffer)
 end
 
 function Linter:_run(buffer)
-  local buffer_info = self._buffers[buffer]
+  local buffer_info = self._buffers[buffer.id]
   if not buffer_info then
     return
   end
@@ -53,7 +53,7 @@ function Linter:_run(buffer)
   }
   -- write lines
   vim.wait()
-  local lines = vim._vim.api.nvim_buf_get_lines(buffer, 0, -1, true)
+  local lines = buffer:lines()
   for _, line in ipairs(lines) do
     proc.stdin:write(line .. '\n')
   end
@@ -84,7 +84,7 @@ function Linter:did_insert_leave(buffer)
 end
 
 function Linter:did_change(change)
-  local buffer_info = self._buffers[change.buffer]
+  local buffer_info = self._buffers[change.buffer.id]
   if not buffer_info then
     return
   end
@@ -99,7 +99,7 @@ function Linter:did_open(buffer)
   local watcher = BufferWatcher:new { buffer = buffer }
   vim.wait()
   local buffer_info = {
-    filename = path.split(vim._vim.api.nvim_buf_get_name(buffer)),
+    filename = buffer:filename(),
     tick = -1,
     tick_queued = 0,
     watcher = watcher,
@@ -107,7 +107,7 @@ function Linter:did_open(buffer)
       self:did_change(change)
     end),
   }
-  self._buffers[buffer] = buffer_info
+  self._buffers[buffer.id] = buffer_info
   self:_run(buffer)
 end
 
@@ -120,7 +120,7 @@ function Linter._shutdown_buffer(buffer_info)
 end
 
 function Linter:did_close(buffer)
-  local buffer_info = self._buffers[buffer]
+  local buffer_info = self._buffers[buffer.id]
   if buffer_info then
     self._shutdown_buffer(buffer_info)
   end

@@ -13,7 +13,7 @@ function BufferWatcher:init(o)
 end
 
 function BufferWatcher:_start()
-  assert(vim._vim.api.nvim_buf_attach(self.buffer, false, {
+  assert(vim._vim.api.nvim_buf_attach(self.buffer.id, false, {
     on_lines=function(_, _, tick, start, stop, stopped, bytes, _, units)
       if self.is_shutdown then
         return true
