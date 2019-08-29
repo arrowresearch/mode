@@ -2,7 +2,6 @@ local async = require 'mode.async'
 local util = require 'mode.util'
 local vim = require 'mode.vim'
 local uv = require 'mode.uv'
-local path = require 'mode.path'
 local BufferWatcher = require 'mode.buffer_watcher'
 
 local Linter = util.Object:extend()
