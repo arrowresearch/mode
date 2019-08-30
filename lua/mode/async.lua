@@ -198,4 +198,8 @@ return {
   Future = Future,
   Task = Task,
   task = task,
+  -- coroutine API
+  resume = resume,
+  yield = coroutine.yield,
+  running = coroutine.running,
 }

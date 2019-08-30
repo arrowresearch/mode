@@ -7,19 +7,19 @@ local util = require 'mode.util'
 local path = require 'mode.path'
 local async = require 'mode.async'
 
--- Wait for VIM API to be available.
+--- Wait for vim API to be available.
 --
--- This assumes that if no coroutine is running then it's safe to call into vim.
-
-local function wait()
-  if not vim.in_fast_event() then
+-- Note that this can return immediately if vim API is safe to use at the
+-- moment. Pass |force| in case you want to force it to yield which can be
+-- useful, for example, to wait for input to be processed by neovim.
+local function wait(force)
+  if not force and not vim.in_fast_event() then
     return
   end
-  local done = async.Future:new()
-  vim.schedule(function()
-    done:put()
-  end)
-  done:wait()
+  local running = async.running()
+  assert(running, 'vim.wait() should be called from a coroutine')
+  vim.schedule(function() async.resume(running) end)
+  async.yield()
 end
 
 -- Proxy for convenient calls to vim functions.
