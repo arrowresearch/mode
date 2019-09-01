@@ -1,10 +1,13 @@
 local async = require 'mode.async'
 local util = require 'mode.util'
+local logging = require 'mode.logging'
 local path = require 'mode.path'
 local lsp = require 'mode.lsp'
 local Linter = require 'mode.linter'
 local diagnostics = require 'mode.diagnostics'
 local vim = require 'mode.vim'
+
+local log = logging.get_logger('language_service')
 
 local function toarray(value)
   if util.table_is_array(value) then
@@ -76,6 +79,7 @@ function LanguageService:linter_for_config(config)
 
   local cmd, args = config.command(root)
   service = Linter:start {
+    id = config.id,
     cmd = cmd,
     args = args,
     cwd = root,
@@ -143,6 +147,7 @@ vim.autocommand.register {
   pattern = '*',
   action = function()
     async.task(function()
+      log:info('shutting down')
       LanguageService:shutdown_all()
     end)
   end
@@ -155,6 +160,7 @@ vim.autocommand.register {
     async.task(function()
       local service = LanguageService:get { buffer = ev.buffer }
       if service then
+        log:info('disabling for buffer %s', ev.buffer:name())
         service:did_close(ev.buffer)
       end
       LanguageService._by_buffer[ev.buffer.id] = nil
@@ -169,6 +175,7 @@ vim.autocommand.register {
     async.task(function()
       local service = LanguageService:get { buffer = ev.buffer }
       if service then
+        log:info('enabling for buffer %s', ev.buffer:name())
         service:did_open(ev.buffer)
       end
     end)
