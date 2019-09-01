@@ -185,8 +185,12 @@ function Task:init(f)
   resume(self.coro)
 end
 
-function Task:wait()
-  return self.completed:wait()
+function Task:wait(...)
+  return self.completed:wait(...)
+end
+
+function Task:subscribe(...)
+  return self.completed:subscribe(...)
 end
 
 local function task(f)
