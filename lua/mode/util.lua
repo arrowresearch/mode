@@ -82,10 +82,16 @@ local function array_copy(t)
   return copy
 end
 
+local function errorf(msg, ...)
+  error(string.format(msg, ...), 2)
+end
+
 return {
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
   table_is_array = table_is_array,
   array_copy = array_copy,
+  errorf = errorf,
+  error = error,
 }
