@@ -54,6 +54,7 @@ function LanguageService:lsp_for_config(config)
 
   local cmd, args = config.command(root)
   service = lsp.LSPClient:start {
+    id = config.id,
     languageId = config.languageId,
     root = root,
     cmd = cmd,
@@ -108,18 +109,18 @@ function LanguageService:get(o)
   service = self._by_buffer[buffer.id]
   if service then
     if type and type ~= service.type then
-      return nil
+      return nil, false
     end
-    return service
+    return service, true
   end
 
   local config = self._config_by_filetype[buffer.options.filetype]
   if not config then
-    return
+    return nil, false
   end
 
   if type and type ~= config.type then
-    return nil
+    return nil, false
   end
 
   if config.type == 'lsp' then
@@ -131,7 +132,7 @@ function LanguageService:get(o)
   end
 
   self._by_buffer[buffer.id] = service
-  return service
+  return service, false
 end
 
 function LanguageService:shutdown_all()
@@ -173,8 +174,8 @@ vim.autocommand.register {
   pattern = '*',
   action = function(ev)
     async.task(function()
-      local service = LanguageService:get { buffer = ev.buffer }
-      if service then
+      local service, seen = LanguageService:get { buffer = ev.buffer }
+      if service and not seen then
         log:info('enabling for buffer %s', ev.buffer:name())
         service:did_open(ev.buffer)
       end
