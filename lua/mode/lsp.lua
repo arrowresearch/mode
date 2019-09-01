@@ -177,7 +177,7 @@ function LSPClient.did_buffer_enter(_) end
 
 function LSPClient:start(config)
   -- check if we have client running for the id
-  local proc = uv.Process:new {
+  local proc = uv.spawn {
     cmd = config.cmd,
     args = config.args
   }

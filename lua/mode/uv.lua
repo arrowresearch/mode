@@ -117,7 +117,7 @@ function Process:init(o)
   self.args = o.args
   self.pid = nil
   self.handle = nil
-  self.exit_code = async.Future:new()
+  self.completion = async.Future:new()
   self.stdin = o.stdin or Pipe:new()
   self.stdout = o.stdout or Pipe:new()
   self.stderr = o.stderr or Pipe:new()
@@ -125,16 +125,26 @@ function Process:init(o)
 end
 
 function Process:spawn()
-  local handle, pid = uv.spawn(self.cmd, {
+  local handle, pid_or_message = uv.spawn(self.cmd, {
     cwd = self.cwd,
     stdio = { self.stdin.handle, self.stdout.handle, self.stderr.handle },
     args = self.args,
-  }, function(exit_code, _)
-    self.exit_code:put(exit_code)
+  }, function(status, signal)
+    self.completion:put({status = status, signal = signal})
+    if self.handle then
+      uv.close(self.handle)
+    end
   end)
-  assert(handle, "Unable to spawn a process")
+
+  if not handle then
+    self.stdout:close()
+    self.stderr:close()
+    self.stdin:close()
+    util.errorf("unable to spawn '%s': %s", self.cmd, pid_or_message)
+  end
+
   self.handle = handle
-  self.pid = pid
+  self.pid = pid_or_message
 end
 
 function Process:shutdown()
@@ -143,7 +153,6 @@ function Process:shutdown()
     self.stdout:close()
     self.stderr:close()
     self.stdin:close()
-    uv.close(self.handle)
   end)
 end
 
@@ -153,9 +162,13 @@ function Process:kill(signal)
   end
 end
 
+local function spawn(o)
+  return Process:new(o)
+end
+
 return {
   Pipe = Pipe,
-  Process = Process,
+  spawn = spawn,
   sleep = sleep,
   _uv = uv,
 }
