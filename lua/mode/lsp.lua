@@ -101,7 +101,7 @@ end
 function LSPClient:did_open(buffer)
   self.initialized:wait()
   local uri = uri_of_path(buffer:filename())
-  local lines = buffer:lines(0, -1)
+  local lines = buffer:contents_lines()
   local text = table.concat(lines, "\n")
   if buffer.options.eol then
     text = text..'\n'
@@ -137,7 +137,7 @@ end
 
 function LSPClient:did_change(change)
   self.initialized:wait()
-  local lines = change.buffer:lines(change.start, change.stopped)
+  local lines = change.buffer:contents_lines(change.start, change.stopped)
   local text = table.concat(lines, "\n") .. ((change.stopped > change.start) and "\n" or "")
   local length = (self.is_utf8 and change.bytes) or change.units
   self.jsonrpc:notify("textDocument/didChange", {

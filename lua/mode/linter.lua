@@ -16,6 +16,9 @@ function Linter:init(o)
   self.diagnostics = async.Channel:new()
 
   self._buffers = {}
+
+  self.current_run = async.Future:new()
+  self.current_run:put()
 end
 
 function Linter:start(o)
@@ -38,6 +41,9 @@ function Linter:_run(buffer)
     return
   end
 
+  self.current_run = async.Future:new()
+  local current_run = self.current_run
+
   vim.wait()
   local filename = buffer:filename()
 
@@ -55,30 +61,29 @@ function Linter:_run(buffer)
     args = args,
     cwd = self.cwd,
   }
-  -- write lines
   vim.wait()
-  local lines = buffer:lines()
+  local lines = buffer:contents_lines()
   for _, line in ipairs(lines) do
     proc.stdin:write(line .. '\n')
   end
   proc.stdin:shutdown()
-  -- read data and produce diagnostics
   local data = proc.stdout:read_all():wait()
-  vim.wait()
+  proc:shutdown()
+
   -- check if we are still at the same tick
   if buffer_info.tick ~= this_tick then
-    return
-  end
-  local items = {}
-  for line in data:gmatch("[^\r\n]+") do
-    local item = self.produce(line)
-    if item then
-      table.insert(items, item)
+    current_run:put()
+  else
+    local items = {}
+    for line in data:gmatch("[^\r\n]+") do
+      local item = self.produce(line)
+      if item then
+        table.insert(items, item)
+      end
     end
+    self.diagnostics:put({{filename = filename, items = items}})
+    current_run:put()
   end
-  self.diagnostics:put({{filename = filename, items = items}})
-  -- shutdown proc
-  proc:shutdown()
 end
 
 function Linter.did_insert_enter() end

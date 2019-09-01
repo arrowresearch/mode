@@ -108,11 +108,16 @@ function Buffer:changedtick()
   return vim.api.nvim_buf_get_changedtick(self.id)
 end
 
-function Buffer:lines(start, stop, strict_indexing)
+function Buffer:contents_lines(start, stop, strict_indexing)
   start = start == nil and 0 or start
   stop = stop == nil and -1 or stop
   strict_indexing = strict_indexing == nil and true or false
   return vim.api.nvim_buf_get_lines(self.id, start, stop, strict_indexing)
+end
+
+function Buffer:contents()
+  local lines = self:contents_lines()
+  return table.concat(lines, '\n')
 end
 
 --
