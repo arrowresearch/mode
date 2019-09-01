@@ -22,7 +22,7 @@ local function definition()
       return
     end
 
-    local params = lsp.current_text_document_position()
+    local params = lsp.TextDocumentPosition:current()
     local resp = service.jsonrpc:request("textDocument/definition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -50,7 +50,7 @@ local function type_definition()
       return
     end
 
-    local params = lsp.current_text_document_position()
+    local params = lsp.TextDocumentPosition:current()
     local resp = service.jsonrpc:request("textDocument/typeDefinition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -72,7 +72,7 @@ end
 
 local function hover()
   local buffer = vim.Buffer:current()
-  local pos = lsp.current_text_document_position()
+  local pos = lsp.TextDocumentPosition:current()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
     if not service then
@@ -83,7 +83,7 @@ local function hover()
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
     -- Check that we are at the same position
-    local next_pos = lsp.current_text_document_position()
+    local next_pos = lsp.TextDocumentPosition:current()
     if next_pos ~= pos then
       return
     end

@@ -9,6 +9,19 @@ local path = require 'mode.path'
 local BufferWatcher = require 'mode.buffer_watcher'
 local P = path.split
 
+-- Utils
+
+local function uri_of_path(p)
+  return "file://" .. p.string
+end
+
+local function uri_to_path(uri)
+  -- strips file:// prefix
+  return P(string.sub(uri, 8))
+end
+
+-- TextDocumentPosition
+
 local TextDocumentPosition = util.Object:extend()
 
 function TextDocumentPosition:init(o)
@@ -23,22 +36,13 @@ function TextDocumentPosition.__eq(a, b)
   return a.textDocument.uri == b.textDocument.uri and a.position == b.position
 end
 
-local function uri_of_path(p)
-  return "file://" .. p.string
-end
-
-local function uri_to_path(uri)
-  -- strips file:// prefix
-  return P(string.sub(uri, 8))
-end
-
-local function current_text_document_position()
+function TextDocumentPosition:current()
   local pos = vim.call.getpos('.')
   local lnum = pos[2]
   local col = pos[3]
   local filename = vim.Buffer:current():filename()
   local uri = uri_of_path(filename)
-  return TextDocumentPosition:new {
+  return self:new {
     uri = uri,
     line = lnum - 1,
     character = col - 1,
@@ -208,7 +212,7 @@ end
 
 return {
   LSPClient = LSPClient,
-  current_text_document_position = current_text_document_position,
+  TextDocumentPosition = TextDocumentPosition,
   uri_of_path = uri_of_path,
   uri_to_path = uri_to_path,
 }
