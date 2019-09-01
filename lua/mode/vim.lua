@@ -60,6 +60,9 @@ local function make_buffer_options_proxy(id)
   setmetatable(t, {
     __index = function(_, k)
       return vim.api.nvim_buf_get_option(id, k)
+    end,
+    __newindex = function(_, k, v)
+      return vim.api.nvim_buf_set_option(id, k, v)
     end
   })
   return t
@@ -75,7 +78,7 @@ function Buffer:init(id)
 end
 
 function Buffer:create(o)
-  o = o or {listed = true, scratch = false}
+  o = o or {listed = true, scratch = false, modifiable = false}
   local id = vim.api.nvim_create_buf(o.listed, o.scratch)
   return self:new(id)
 end
@@ -104,8 +107,20 @@ function Buffer:filename()
   return path.split(vim.api.nvim_buf_get_name(self.id))
 end
 
+function Buffer:name()
+  return vim.api.nvim_buf_get_name(self.id)
+end
+
+function Buffer:set_name(name)
+  return vim.api.nvim_buf_set_name(self.id, name)
+end
+
 function Buffer:changedtick()
   return vim.api.nvim_buf_get_changedtick(self.id)
+end
+
+function Buffer:append_lines(lines)
+  return vim.api.nvim_buf_set_lines(self.id, 0, 0, false, lines)
 end
 
 function Buffer:contents_lines(start, stop, strict_indexing)
