@@ -85,6 +85,7 @@ function LanguageService:linter_for_config(config)
     for _, report in ipairs(reports) do
       diagnostics:set(report.filename, report.items)
     end
+    vim.wait()
     diagnostics:update()
   end)
 
