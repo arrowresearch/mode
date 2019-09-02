@@ -1,4 +1,5 @@
 local util = require 'mode.util'
+local logging = require 'mode.logging'
 local uv = require 'mode.uv'
 local async = require 'mode.async'
 local jsonrpc = require 'mode.jsonrpc'
@@ -54,6 +55,7 @@ local LSPClient = util.Object:extend()
 LSPClient.type = "lsp"
 
 function LSPClient:init(o)
+  self.log = logging.get_logger(string.format("lsp:%s", o.id))
   self.jsonrpc = o.jsonrpc
   self.root = o.root
   self.languageId = o.languageId
@@ -83,6 +85,7 @@ function LSPClient:init(o)
     if notif.method == 'textDocument/publishDiagnostics' then
       local filename = uri_to_path(notif.params.uri)
       local items = {}
+      self.log:info("textDocument/publishDiagnostics %s %d", filename, #notif.params.diagnostics)
       for _, diag in ipairs(notif.params.diagnostics) do
         diag.relatedInformation = nil
         diag.relatedLocations = nil
@@ -187,6 +190,7 @@ function LSPClient:start(config)
   }
 
   local client = self:new {
+    id = config.id,
     root = config.root,
     languageId = config.languageId,
     jsonrpc = jsonrpc.JSONRPCClient:new {
