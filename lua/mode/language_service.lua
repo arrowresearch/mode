@@ -54,6 +54,7 @@ function LanguageService:get_lsp_for_config(config)
     return service
   end
 
+  log:info('starting lsp %s@%s', config.id, root.string)
   local cmd, args = config.command(root)
   service = lsp.LSPClient:start {
     id = config.id,
@@ -80,6 +81,7 @@ function LanguageService:get_linter_for_config(config)
     return service
   end
 
+  log:info('starting linter %s@%s', config.id, root.string)
   local cmd, args = config.command(root)
   service = Linter:start {
     id = config.id,
@@ -126,6 +128,7 @@ function LanguageService:get(o)
       local name = filetype .. '.lua'
       local mode_config = path.split(p) / 'mode' / 'filetype' / name
       if fs.exists(mode_config) then
+        log:info('loading filetype config %s', mode_config.string)
         dofile(mode_config.string)
       end
     end
@@ -166,7 +169,7 @@ vim.autocommand.register {
   pattern = '*',
   action = function()
     async.task(function()
-      log:info('shutting down')
+      log:info('shutdown_all')
       LanguageService:shutdown_all()
     end)
   end
@@ -179,7 +182,7 @@ vim.autocommand.register {
     async.task(function()
       local service = LanguageService:get { buffer = ev.buffer }
       if service then
-        log:info('disabling for buffer %s', ev.buffer:name())
+        log:info('did_close %s', ev.buffer:name())
         service:did_close(ev.buffer)
       end
       LanguageService._by_buffer[ev.buffer.id] = nil
@@ -194,7 +197,7 @@ vim.autocommand.register {
     async.task(function()
       local service, seen = LanguageService:get { buffer = ev.buffer }
       if service and not seen then
-        log:info('enabling for buffer %s', ev.buffer:name())
+        log:info('did_open %s', ev.buffer:name())
         service:did_open(ev.buffer)
       end
     end)
