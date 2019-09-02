@@ -1,4 +1,5 @@
 local async = require 'mode.async'
+local fs = require 'mode.fs'
 local util = require 'mode.util'
 local logging = require 'mode.logging'
 local path = require 'mode.path'
@@ -21,6 +22,7 @@ local LanguageService = {
   _by_root = {},
   _by_buffer = {},
   _config_by_filetype = {},
+  _rtp_searched_by_filetype = {},
 }
 
 function LanguageService:configure_lsp(config)
@@ -39,7 +41,7 @@ function LanguageService:configure_linter(config)
   end
 end
 
-function LanguageService:lsp_for_config(config)
+function LanguageService:get_lsp_for_config(config)
   local filename = path.split(vim.call.expand("%:p"))
   local root = config.root(filename)
   if not root then
@@ -65,7 +67,7 @@ function LanguageService:lsp_for_config(config)
   return service
 end
 
-function LanguageService:linter_for_config(config)
+function LanguageService:get_linter_for_config(config)
   local filename = path.split(vim.call.expand("%:p"))
   local root = config.root(filename)
   if not root then
@@ -114,7 +116,23 @@ function LanguageService:get(o)
     return service, true
   end
 
-  local config = self._config_by_filetype[buffer.options.filetype]
+  local filetype = buffer.options.filetype
+
+  -- Load configuration from &runtimepath/mode/filetype/&filetype.lua
+  -- TODO(andreypopp): Need to move it closer to autocmd
+  if not self._rtp_searched_by_filetype[filetype] then
+    local paths = vim._vim.api.nvim_list_runtime_paths()
+    for _, p in ipairs(paths) do
+      local name = filetype .. '.lua'
+      local mode_config = path.split(p) / 'mode' / 'filetype' / name
+      if fs.exists(mode_config) then
+        dofile(mode_config.string)
+      end
+    end
+    self._rtp_searched_by_filetype[filetype] = true
+  end
+
+  local config = self._config_by_filetype[filetype]
   if not config then
     return nil, false
   end
@@ -124,9 +142,9 @@ function LanguageService:get(o)
   end
 
   if config.type == 'lsp' then
-    service = self:lsp_for_config(config.config)
+    service = self:get_lsp_for_config(config.config)
   elseif config.type == 'linter' then
-    service = self:linter_for_config(config.config)
+    service = self:get_linter_for_config(config.config)
   else
     assert(false, "Unknown language service type: " .. config.type)
   end
