@@ -1,8 +1,7 @@
-# mode
-
 <p align="center">
-  <img src="./logo.png" width="200" title="mode!" alt="mode logo">
+  <img src="./logo.png" width="150" title="mode!" alt="mode logo">
 </p>
+<h1 align="center">mode</h1>
 
 mode is a **work in progress**.
 
