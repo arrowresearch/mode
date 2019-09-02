@@ -1,5 +1,7 @@
 # mode
 
+![mode logo](./logo.png)
+
 mode is a **work in progress**.
 
 mode is a plugin for [neovim][] which attempts to do the following:
