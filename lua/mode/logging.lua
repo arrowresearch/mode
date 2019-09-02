@@ -3,10 +3,12 @@ local vim = require 'mode.vim'
 
 local Log = util.Object:extend()
 
+Log.filetype = 'mode.log'
+
 function Log:init(_)
   self.buffer = vim.Buffer:create { scratch = true; listed = true; }
   self.buffer.options.modifiable = false
-  self.buffer.options.filetype = 'mode-log'
+  self.buffer.options.filetype = Log.filetype
   self.buffer:set_name('** mode **')
 end
 
@@ -39,6 +41,17 @@ local function get_logger(id)
   end
   return Logger:new { log = log, id = id }
 end
+
+vim.autocommand.register {
+  event = vim.autocommand.BufEnter,
+  pattern = '*',
+  action = function(ev)
+    if ev.buffer.options.filetype == Log.filetype then
+      local api = vim._vim.api
+      api.nvim_win_set_option(api.nvim_get_current_win(), 'wrap', false)
+    end
+  end
+}
 
 return {
   get_logger = get_logger,
