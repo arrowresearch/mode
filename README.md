@@ -1,6 +1,8 @@
 # mode
 
-![mode logo](./logo.png)
+<p align="center">
+  <img src="./logo.png" width="200" title="mode!" alt="mode logo">
+</p>
 
 mode is a **work in progress**.
 
