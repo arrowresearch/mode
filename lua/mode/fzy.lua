@@ -9,9 +9,9 @@ local function run(o)
   local width = vim._vim.api.nvim_win_get_width(win)
   local height = vim._vim.api.nvim_win_get_height(win)
   local row
-  local size = 10
+  local size = o.size or 15
 
-  if height > 15 then
+  if height - size > 10 then
     row = height - size
     height = size
   else
@@ -61,6 +61,7 @@ local function files()
   run {
     prompt = 'files> ',
     cmd = 'ag -l',
+    size = 20,
     on_result = function(filename)
       if filename then
         vim.execute([[edit %s]], filename)
