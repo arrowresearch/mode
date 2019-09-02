@@ -2,6 +2,9 @@
   <img src="./logo.png" width="150" title="mode!" alt="mode logo">
 </p>
 <h1 align="center">mode</h1>
+<h2 align="center">
+  an IDE experience and a standard library for neovim Lua runtime
+</h2>
 
 mode is a **work in progress**.
 
