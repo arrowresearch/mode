@@ -69,7 +69,7 @@ function Channel:init()
 end
 
 function Channel:subscribe(f)
-  assert(not self.closed, 'Channel: channel is closed')
+  assert(not self.closed, 'channel is closed')
   self.listeners = LinkedList.add(self.listeners, f)
   return function()
     self.listeners = LinkedList.remove(self.listeners, f)
@@ -88,7 +88,7 @@ function Channel:wait_next()
 end
 
 function Channel:put(value)
-  assert(not self.closed, 'Channel: channel is closed')
+  assert(not self.closed, 'channel is closed')
   local listeners = self.listeners
   while listeners do
     listeners.value(value)
