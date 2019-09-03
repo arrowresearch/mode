@@ -123,6 +123,12 @@ function Buffer:append_lines(lines)
   return vim.api.nvim_buf_set_lines(self.id, 0, 0, false, lines)
 end
 
+function Buffer:set_lines(lines, start, stop)
+  start = start == nil and 0 or start
+  stop = stop == nil and -1 or stop
+  return vim.api.nvim_buf_set_lines(self.id, start, stop, false, lines)
+end
+
 function Buffer:contents_lines(start, stop, strict_indexing)
   start = start == nil and 0 or start
   stop = stop == nil and -1 or stop
