@@ -7,6 +7,7 @@ local BufferWatcher = require 'mode.buffer_watcher'
 
 local Linter = util.Object:extend()
 
+Linter.debounce = 700
 Linter.type = "linter"
 
 function Linter:init(o)
@@ -29,7 +30,7 @@ end
 
 function Linter:_queue_run(buffer)
   async.task(function()
-    uv.sleep(700):wait()
+    uv.sleep(Linter.debounce):wait()
     self:_run(buffer)
   end)
 end
@@ -44,13 +45,13 @@ function Linter:_run(buffer)
   end
 
   local this_tick = info.tick_queued
+  local this_name = vim.call.fnamemodify(info.buffer:name(), ':.')
   info.tick = this_tick
 
   local function log_run(line, ...)
     vim.wait()
     local msg = string.format(line, ...)
-    local filename = vim.call.fnamemodify(info.buffer:name(), ':.')
-    self.log:info("%s@%d %s", filename, this_tick, msg)
+    self.log:info("%s@%d %s", this_name, this_tick, msg)
   end
 
   log_run("executing '%s'", self.cmd)
@@ -121,8 +122,8 @@ function Linter:did_change(change)
     return
   end
   info.tick_queued = change.tick
-  local mode = vim._vim.api.nvim_get_mode().mode
-  if mode:sub(1, 1) == "n" then
+  local mode = vim._vim.api.nvim_get_mode().mode:sub(1, 1)
+  if mode == "n" or mode == "c" then
     self:_queue_run(change.buffer)
   end
 end
@@ -163,8 +164,9 @@ function Linter:did_close(buffer)
 end
 
 function Linter:shutdown()
-  for _, info in pairs(self._buffers) do
+  for id, info in pairs(self._buffers) do
     self._shutdown_buffer(info)
+    self._buffers[id] = nil
   end
 end
 
