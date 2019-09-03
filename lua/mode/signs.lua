@@ -16,6 +16,12 @@ function Signs:init(o)
   assert(res == 0, 'Signs.init: unable to define sign')
 end
 
+function Signs:get(buffer)
+  return vim.call.sign_getplaced(buffer.id, {
+    group = self.name
+  })[1].signs
+end
+
 function Signs:place(sign)
   local res = vim.call.sign_place(
     0, self.name, self.name, sign.buffer.id,

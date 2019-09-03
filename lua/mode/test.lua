@@ -1,3 +1,4 @@
+local util = require 'mode.util'
 local vim = require 'mode.vim'
 local async = require 'mode.async'
 
@@ -54,6 +55,7 @@ local function run()
 end
 
 return {
+  dofile = util.dofile,
   state = state,
   edit = edit,
   execute = execute,
