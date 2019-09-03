@@ -86,7 +86,12 @@ local function errorf(msg, ...)
   error(string.format(msg, ...), 2)
 end
 
+local function _dofile(path)
+  dofile(path.string)
+end
+
 return {
+  dofile = _dofile,
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
