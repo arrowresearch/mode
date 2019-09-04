@@ -39,9 +39,10 @@ local function after_each(run)
   table.insert(lifecycle_after_each, {run = run})
 end
 
-local function run()
+local function run(testsuite_name)
   local latch = #cases
   async.task(function()
+    print(string.format("*** TEST SUITE %s", testsuite_name))
     for _, case in ipairs(cases) do
       print(string.format("TEST >> %s", case.name))
       execute "silent %%bdelete!"
