@@ -24,7 +24,7 @@ local p = require 'mode.path'
 _G.__FILE__ = p.split("${TEST}")
 _G.__DIR__ = p.split("${TEST_DIR}")
 LUAEOF
-echo "TEST SUITE ${TEST}"
+echo "*** TEST SUITE ${TEST}"
 verbose luafile ${TEST}
 verbose lua require('mode.test').run()
 echo ""
