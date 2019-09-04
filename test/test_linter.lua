@@ -1,6 +1,5 @@
 local t = require 'mode.test'
 local fs = require 'mode.fs'
-local vim = require 'mode.vim'
 local Linter = require 'mode.linter'
 
 Linter.debounce = 0

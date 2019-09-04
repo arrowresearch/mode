@@ -5,7 +5,7 @@ TESTS = $(shell find test -name 'test_*.lua')
 
 .PHONY: check
 check:
-	@luacheck lua --exclude-files $(CHECK_EXCLUDE)
+	@luacheck lua test --exclude-files $(CHECK_EXCLUDE)
 
 .PHONY: test
 test: $(TESTS:%=%.run)
