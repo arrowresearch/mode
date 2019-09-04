@@ -11,7 +11,8 @@ Linter.debounce = 700
 Linter.type = "linter"
 
 function Linter:init(o)
-  self.log = logging.get_logger(string.format('linter:%s', o.id))
+  self.id = "linter:" .. o.id
+  self.log = logging.get_logger(self.id)
   self.cmd = o.cmd
   self.args = o.args
   self.cwd = o.cwd
@@ -31,6 +32,7 @@ end
 function Linter:_queue_run(buffer)
   async.task(function()
     uv.sleep(Linter.debounce):wait()
+    vim.wait()
     self:_run(buffer)
   end)
 end
@@ -59,7 +61,6 @@ function Linter:_run(buffer)
   self.current_run = async.Future:new()
   local current_run = self.current_run
 
-  vim.wait()
   local filename = info.buffer:filename()
 
   local args = {}
@@ -75,6 +76,7 @@ function Linter:_run(buffer)
   })
   if not proc_status then
     log_run("error: %s", proc)
+    current_run:put()
     return
   end
   local lines = info.buffer:contents_lines()
@@ -95,7 +97,7 @@ function Linter:_run(buffer)
   else
     local items = {}
     for line in data:gmatch("[^\r\n]+") do
-      local item = self.produce(line)
+      local item = self.produce(line, filename)
       if item then
         table.insert(items, item)
       end
@@ -129,8 +131,8 @@ function Linter:did_change(change)
 end
 
 function Linter:did_open(buffer)
-  local watcher = BufferWatcher:new { buffer = buffer }
   vim.wait()
+  local watcher = BufferWatcher:new { buffer = buffer }
   local info = {
     tick = -1,
     tick_queued = 0,
