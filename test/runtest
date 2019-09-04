@@ -26,7 +26,15 @@ _G.__DIR__ = p.split("${TEST_DIR}")
 LUAEOF
 verbose luafile ${TEST}
 verbose lua require('mode.test').Runner:run("${TEST}")
-silent quitall!
+verbose echo ""
+lua << LUAEOF
+  local Runner = require('mode.test').Runner
+  if Runner.state.failures > 0 then
+    vim.api.nvim_command [[silent cq!]]
+  else
+    vim.api.nvim_command [[silent quitall!]]
+  end
+LUAEOF
 EOF
 
 ${NVIM_PROG} -u NONE --noplugin --clean -es +"verbose source ${INIT_VIM}"
