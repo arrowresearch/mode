@@ -9,7 +9,7 @@ Linter.debounce = 0
 
 t.dofile(__DIR__ / ".." / "mode" / "filetype" / "lua.lua")
 
-t.test("luacheck: linter sets warnings signs", function()
+t.test("luacheck: sets warnings signs", function()
   local buf = t.edit "some.lua"
   t.execute [[set filetype=lua]]
   t.feed [[ilocal x = 12\<CR>local y = 42\<ESC>]]
@@ -18,8 +18,22 @@ t.test("luacheck: linter sets warnings signs", function()
   assert(service)
   t.wait(service.current_run)
 
-  local warnings_signs = Diagnostics.use_warnings_signs:get(buf)
-  assert(#warnings_signs == 2)
-  assert(warnings_signs[1].lnum == 1)
-  assert(warnings_signs[2].lnum == 2)
+  local signs = Diagnostics.use_warnings_signs:get(buf)
+  assert(#signs == 2)
+  assert(signs[1].lnum == 1)
+  assert(signs[2].lnum == 2)
+end)
+
+t.test("luacheck: sets errors signs", function()
+  local buf = t.edit "some.lua"
+  t.execute [[set filetype=lua]]
+  t.feed [[ilocal x\<CR>\<ESC>]]
+
+  local service = LanguageService:get()
+  assert(service)
+  t.wait(service.current_run)
+
+  local signs = Diagnostics.use_errors_signs:get(buf)
+  assert(#signs == 1)
+  assert(signs[1].lnum == 2)
 end)
