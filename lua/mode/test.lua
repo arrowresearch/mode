@@ -2,6 +2,8 @@ local util = require 'mode.util'
 local vim = require 'mode.vim'
 local async = require 'mode.async'
 
+-- Vim utils
+
 local function execute(...)
   vim.wait(true)
   return vim.execute(...)
@@ -22,33 +24,27 @@ local function wait(future)
   vim.wait(true)
 end
 
-local state = {failures = 0}
-local cases = {}
-local lifecycle_after_each = {}
-local lifecycle_before_each = {}
+-- Test runner
 
-local function test(name, run)
-  table.insert(cases, {run = run, name = name})
-end
+local Runner = {
+  state = {failures = 0},
+  cases = {},
+  lifecycle = {
+    after_each = {},
+    before_each = {},
+  },
+}
 
-local function before_each(run)
-  table.insert(lifecycle_before_each, {run = run})
-end
-
-local function after_each(run)
-  table.insert(lifecycle_after_each, {run = run})
-end
-
-local function run(testsuite_name)
-  local latch = #cases
+function Runner:run(testsuite_name)
+  local latch = #self.cases
   async.task(function()
     print(string.format("*** TEST SUITE %s", testsuite_name))
-    for _, case in ipairs(cases) do
+    for _, case in ipairs(self.cases) do
       print(string.format("TEST >> %s", case.name))
       execute "silent %%bdelete!"
       -- Run after_each
       vim.wait(true)
-      for _, t in ipairs(lifecycle_before_each) do
+      for _, t in ipairs(self.lifecycle.before_each) do
         local ok, msg = pcall(t.run)
         if not ok then
           print(string.format("LIFECYCLE FAIL before_each: %s", msg))
@@ -60,7 +56,7 @@ local function run(testsuite_name)
         local _, msg = pcall(case.run)
         latch = latch - 1
         if msg then
-          state.failures = state.failures + 1
+          self.state.failures = self.state.failures + 1
           print(string.format("TEST FAIL %s: %s", case.name, msg))
         else
           print(string.format("TEST OK %s", case.name))
@@ -68,7 +64,7 @@ local function run(testsuite_name)
       end
       -- Run after_each
       vim.wait(true)
-      for _, t in ipairs(lifecycle_after_each) do
+      for _, t in ipairs(self.lifecycle.after_each) do
         local ok, msg = pcall(t.run)
         if not ok then
           print(string.format("LIFECYCLE FAIL after_each: %s", msg))
@@ -84,9 +80,23 @@ local function run(testsuite_name)
   end
 end
 
+-- Test runner test API
+
+local function test(name, run)
+  table.insert(Runner.cases, {run = run, name = name})
+end
+
+local function before_each(run)
+  table.insert(Runner.lifecycle.before_each, {run = run})
+end
+
+local function after_each(run)
+  table.insert(Runner.lifecycle.after_each, {run = run})
+end
+
 return {
+  Runner = Runner,
   dofile = util.dofile,
-  state = state,
   edit = edit,
   execute = execute,
   test = test,
@@ -94,5 +104,4 @@ return {
   after_each = after_each,
   feed = feed,
   wait = wait,
-  run = run,
 }

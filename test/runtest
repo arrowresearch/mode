@@ -25,8 +25,7 @@ _G.__FILE__ = p.split("${TEST}")
 _G.__DIR__ = p.split("${TEST_DIR}")
 LUAEOF
 verbose luafile ${TEST}
-verbose lua require('mode.test').run("${TEST}")
-echo ""
+verbose lua require('mode.test').Runner:run("${TEST}")
 silent quitall!
 EOF
 
