@@ -1,6 +1,12 @@
 local uv = require 'mode.uv'
+local path = require 'mode.path'
 
 local exports = {}
+
+--- Check if path exists
+function exports.cwd()
+  return path.split(uv._uv.cwd())
+end
 
 --- Check if path exists
 function exports.exists(p)
