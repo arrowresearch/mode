@@ -18,17 +18,15 @@ function BufferWatcher:_start()
       if self.is_shutdown then
         return true
       end
-      async.task(function()
-        self.updates:put {
-          buffer = self.buffer,
-          tick = tick,
-          start = start,
-          stop = stop,
-          stopped = stopped,
-          bytes = bytes,
-          units = units
-        }
-      end)
+      self.updates:put {
+        buffer = self.buffer,
+        tick = tick,
+        start = start,
+        stop = stop,
+        stopped = stopped,
+        bytes = bytes,
+        units = units
+      }
     end,
     utf_sizes=not self.is_utf8
   }))

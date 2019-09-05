@@ -16,7 +16,7 @@ t.test("luacheck: sets warnings signs", function()
 
   local service = LanguageService:get()
   assert(service)
-  t.wait(service.current_run)
+  t.wait(service.on_run_completed:next())
 
   local signs = Diagnostics.use_warnings_signs:get(buf)
   assert(#signs == 2)
@@ -31,7 +31,7 @@ t.test("luacheck: sets errors signs", function()
 
   local service = LanguageService:get()
   assert(service)
-  t.wait(service.current_run)
+  t.wait(service.on_run_completed:next())
 
   local signs = Diagnostics.use_errors_signs:get(buf)
   assert(#signs == 1)

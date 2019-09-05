@@ -1,4 +1,3 @@
-local async = require 'mode.async'
 local fs = require 'mode.fs'
 local util = require 'mode.util'
 local logging = require 'mode.logging'
@@ -168,10 +167,8 @@ vim.autocommand.register {
   event = vim.autocommand.VimLeavePre,
   pattern = '*',
   action = function()
-    async.task(function()
-      log:info('shutdown_all')
-      LanguageService:shutdown_all()
-    end)
+    log:info('shutdown_all')
+    LanguageService:shutdown_all()
   end
 }
 
@@ -179,14 +176,12 @@ vim.autocommand.register {
   event = vim.autocommand.BufUnload,
   pattern = '*',
   action = function(ev)
-    async.task(function()
-      local service = LanguageService:get { buffer = ev.buffer }
-      if service then
-        log:info('did_close %s', ev.buffer:name())
-        service:did_close(ev.buffer)
-      end
-      LanguageService._by_buffer[ev.buffer.id] = nil
-    end)
+    local service = LanguageService:get { buffer = ev.buffer }
+    if service then
+      log:info('did_close %s', ev.buffer:name())
+      service:did_close(ev.buffer)
+    end
+    LanguageService._by_buffer[ev.buffer.id] = nil
   end
 }
 
@@ -194,13 +189,11 @@ vim.autocommand.register {
   event = vim.autocommand.FileType,
   pattern = '*',
   action = function(ev)
-    async.task(function()
-      local service, seen = LanguageService:get { buffer = ev.buffer }
-      if service and not seen then
-        log:info('did_open %s', ev.buffer:name())
-        service:did_open(ev.buffer)
-      end
-    end)
+    local service, seen = LanguageService:get { buffer = ev.buffer }
+    if service and not seen then
+      log:info('did_open %s', ev.buffer:name())
+      service:did_open(ev.buffer)
+    end
   end
 }
 
@@ -208,14 +201,10 @@ vim.autocommand.register {
   event = vim.autocommand.InsertEnter,
   pattern = '*',
   action = function(ev)
-    async.task(function()
-      local service = LanguageService:get { buffer = ev.buffer }
-      if service then
-        async.task(function()
-          service:did_insert_enter(ev.buffer)
-        end)
-      end
-    end)
+    local service = LanguageService:get { buffer = ev.buffer }
+    if service then
+      service:did_insert_enter(ev.buffer)
+    end
   end
 }
 
@@ -223,14 +212,10 @@ vim.autocommand.register {
   event = vim.autocommand.BufEnter,
   pattern = '*',
   action = function(ev)
-    async.task(function()
-      local service = LanguageService:get { buffer = ev.buffer }
-      if service then
-        async.task(function()
-          service:did_buffer_enter(ev.buffer)
-        end)
-      end
-    end)
+    local service = LanguageService:get { buffer = ev.buffer }
+    if service then
+      service:did_buffer_enter(ev.buffer)
+    end
   end
 }
 
@@ -238,14 +223,10 @@ vim.autocommand.register {
   event = vim.autocommand.InsertLeave,
   pattern = '*',
   action = function(ev)
-    async.task(function()
-      local service = LanguageService:get { buffer = ev.buffer }
-      if service then
-        async.task(function()
-          service:did_insert_leave(ev.buffer)
-        end)
-      end
-    end)
+    local service = LanguageService:get { buffer = ev.buffer }
+    if service then
+      service:did_insert_leave(ev.buffer)
+    end
   end
 }
 

@@ -1,3 +1,4 @@
+-- luacheck: globals vim
 --
 -- Async primitives on top of Lua coroutine API.
 --
@@ -59,48 +60,6 @@ local function resume(coro, ...)
   return select(2, xpresume(coro, generic_error_handler, ...))
 end
 
--- Channel
-
-local Channel = util.Object:extend()
-
-function Channel:init()
-  self.closed = false
-  self.listeners = LinkedList.empty
-end
-
-function Channel:subscribe(f)
-  assert(not self.closed, 'channel is closed')
-  self.listeners = LinkedList.add(self.listeners, f)
-  return function()
-    self.listeners = LinkedList.remove(self.listeners, f)
-  end
-end
-
-function Channel:wait_next()
-  local running = coroutine.running()
-  assert(running, 'Should be called from a coroutine')
-  -- luacheck: push ignore unused unsubscribe
-  local unsubscribe = self:subscribe(function(value)
-    unsubscribe()
-    resume(running, value)
-  end)
-  -- luacheck: pop
-end
-
-function Channel:put(value)
-  assert(not self.closed, 'channel is closed')
-  local listeners = self.listeners
-  while listeners do
-    listeners.value(value)
-    listeners = listeners.next
-  end
-end
-
-function Channel:close()
-  self.closed = true
-  self.listeners = nil
-end
-
 -- Future
 --
 -- Future is a container for values which will be computed in the future. It can
@@ -157,6 +116,47 @@ function Future:map(f)
   return next
 end
 
+-- Channel
+
+local Channel = util.Object:extend()
+
+function Channel:init()
+  self.closed = false
+  self.listeners = LinkedList.empty
+end
+
+function Channel:subscribe(f)
+  assert(not self.closed, 'channel is closed')
+  self.listeners = LinkedList.add(self.listeners, f)
+  return function()
+    self.listeners = LinkedList.remove(self.listeners, f)
+  end
+end
+
+function Channel:next()
+  local next = Future:new()
+  local unsubscribe
+  unsubscribe = self:subscribe(function(value)
+    unsubscribe()
+    next:put(value)
+  end)
+  return next
+end
+
+function Channel:put(value)
+  assert(not self.closed, 'channel is closed')
+  local listeners = self.listeners
+  while listeners do
+    listeners.value(value)
+    listeners = listeners.next
+  end
+end
+
+function Channel:close()
+  self.closed = true
+  self.listeners = nil
+end
+
 -- Task
 --
 -- This is a wrapper around Lua coroutine which provides conveniences.
@@ -182,7 +182,9 @@ function Task:init(f)
     f()
     self.completed:put()
   end)
-  resume(self.coro)
+  vim.schedule(function()
+    resume(self.coro)
+  end)
 end
 
 function Task:wait(...)

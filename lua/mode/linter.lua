@@ -21,23 +21,26 @@ function Linter:init(o)
 
   self._buffers = {}
 
-  self.current_run = async.Future:new()
-  self.current_run:put()
+  self.on_schedule_run = async.Channel:new()
+  self.on_process_started = async.Channel:new()
+  self.on_process_completed = async.Channel:new()
+  self.on_run_completed = async.Channel:new()
 end
 
 function Linter:start(o)
   return self:new(o)
 end
 
-function Linter:_queue_run(buffer)
+function Linter:schedule_run(buffer)
+  self.on_schedule_run:put()
   async.task(function()
     uv.sleep(Linter.debounce):wait()
-    vim.wait()
-    self:_run(buffer)
+    self:run(buffer)
   end)
 end
 
-function Linter:_run(buffer)
+function Linter:run(buffer)
+  vim.wait()
   local info = self._buffers[buffer.id]
   if not info then
     return
@@ -58,9 +61,6 @@ function Linter:_run(buffer)
 
   log_run("executing '%s'", self.cmd)
 
-  self.current_run = async.Future:new()
-  local current_run = self.current_run
-
   local filename = info.buffer:filename()
 
   local args = {}
@@ -76,9 +76,11 @@ function Linter:_run(buffer)
   })
   if not proc_status then
     log_run("error: %s", proc)
-    current_run:put()
+    self.on_run_completed:put()
     return
   end
+  self.on_process_started:put()
+
   local lines = info.buffer:contents_lines()
   for _, line in ipairs(lines) do
     proc.stdin:write(line .. '\n')
@@ -88,12 +90,13 @@ function Linter:_run(buffer)
   proc:shutdown()
 
   local status = proc.completion:wait().status
+  self.on_process_completed:put()
   log_run("process exited with %d code", status)
 
   -- check if we are still at the same tick
   if info.tick ~= this_tick then
     log_run("discarding results since buffer has new changes", status)
-    current_run:put()
+    self.on_run_completed:put()
   else
     local items = {}
     for line in data:gmatch("[^\r\n]+") do
@@ -104,18 +107,22 @@ function Linter:_run(buffer)
     end
     log_run("collected %d diagnostics", #items)
     self.diagnostics:put({{filename = filename, items = items}})
-    current_run:put()
+    self.on_run_completed:put()
   end
 end
 
 function Linter.did_insert_enter() end
 
 function Linter:did_insert_leave(buffer)
-  self:_run(buffer)
+  async.task(function()
+    self:run(buffer)
+  end)
 end
 
 function Linter:did_buffer_enter(buffer)
-  self:_run(buffer)
+  async.task(function()
+    self:run(buffer)
+  end)
 end
 
 function Linter:did_change(change)
@@ -126,30 +133,28 @@ function Linter:did_change(change)
   info.tick_queued = change.tick
   local mode = vim._vim.api.nvim_get_mode().mode:sub(1, 1)
   if mode == "n" or mode == "c" then
-    self:_queue_run(change.buffer)
+    self:schedule_run(change.buffer)
   end
 end
 
 function Linter:did_open(buffer)
-  vim.wait()
-  local watcher = BufferWatcher:new { buffer = buffer }
-  local info = {
-    tick = -1,
-    tick_queued = 0,
-    buffer = buffer,
-    watcher = watcher,
-    stop_updates = watcher.updates:subscribe(function(change)
-      self:did_change(change)
-    end),
-  }
-  self._buffers[buffer.id] = info
-  self:_run(buffer)
+  async.task(function()
+    local watcher = BufferWatcher:new { buffer = buffer }
+    local info = {
+      tick = -1,
+      tick_queued = 0,
+      buffer = buffer,
+      watcher = watcher,
+      stop_updates = watcher.updates:subscribe(function(change)
+        self:did_change(change)
+      end),
+    }
+    self._buffers[buffer.id] = info
+    self:run(buffer)
+  end)
 end
 
 function Linter._shutdown_buffer(info)
-  if info.proc then
-    info.proc:shutdown()
-  end
   info.watcher:shutdown()
   info.stop_updates()
   info.buffer = nil
@@ -170,6 +175,10 @@ function Linter:shutdown()
     self._shutdown_buffer(info)
     self._buffers[id] = nil
   end
+  self.on_schedule_run:close()
+  self.on_process_started:close()
+  self.on_process_completed:close()
+  self.on_run_completed:close()
 end
 
 return Linter

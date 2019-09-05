@@ -53,7 +53,7 @@ t.test("linter: run on did_open", function()
   }
 
   linter:did_open(buf)
-  t.wait(linter.current_run)
+  t.wait(linter.on_run_completed:next())
 
   assert(#diagnostics_received == 1)
   assert(diagnostics_received[1].filename == buf:filename())
@@ -65,7 +65,7 @@ t.test("linter: run on changes", function()
 
   -- Open buffer
   linter:did_open(buf)
-  t.wait(linter.current_run)
+  t.wait(linter.on_run_completed:next())
 
   assert(#diagnostics_received == 1)
   assert(diagnostics_received[1].filename == buf:filename())
@@ -92,7 +92,7 @@ t.test("linter: run on changes", function()
   linter:did_insert_enter(buf)
   t.feed [[isometext here<Esc>]]
   linter:did_insert_leave(buf)
-  t.wait(linter.current_run)
+  t.wait(linter.on_run_completed:next())
 
   assert(#diagnostics_received == 1)
   assert(diagnostics_received[1].filename == buf:filename())

@@ -106,29 +106,31 @@ function LSPClient:init(o)
 end
 
 function LSPClient:did_open(buffer)
-  self.initialized:wait()
-  local uri = uri_of_path(buffer:filename())
-  local lines = buffer:contents_lines()
-  local text = table.concat(lines, "\n")
-  if buffer.options.eol then
-    text = text..'\n'
-  end
-  self.jsonrpc:notify("textDocument/didOpen", {
-    textDocument = {
-      uri = uri,
-      text = text,
-      version = buffer:changedtick(),
-      languageId = self.languageId,
+  async.task(function()
+    self.initialized:wait()
+    local uri = uri_of_path(buffer:filename())
+    local lines = buffer:contents_lines()
+    local text = table.concat(lines, "\n")
+    if buffer.options.eol then
+      text = text..'\n'
+    end
+    self.jsonrpc:notify("textDocument/didOpen", {
+      textDocument = {
+        uri = uri,
+        text = text,
+        version = buffer:changedtick(),
+        languageId = self.languageId,
+      }
+    })
+    local watcher = BufferWatcher:new {
+      buffer = buffer,
+      is_utf8 = self.is_utf8,
     }
-  })
-  local watcher = BufferWatcher:new {
-    buffer = buffer,
-    is_utf8 = self.is_utf8,
-  }
-  watcher.updates:subscribe(function(change)
-    self:did_change(change)
+    watcher.updates:subscribe(function(change)
+      self:did_change(change)
+    end)
+    self.buffers[buffer.id] = { watcher = watcher, buffer = buffer }
   end)
-  self.buffers[buffer.id] = { watcher = watcher, buffer = buffer }
 end
 
 function LSPClient:did_close(buffer)
