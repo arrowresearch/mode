@@ -207,6 +207,12 @@ return {
     local filename = vim.Buffer:current():filename()
     return diagnostics:get(filename).counts
   end,
+  enable_filetype = function(filetype)
+    LanguageService:enable_filetype(filetype)
+  end,
+  disable_filetype = function(filetype)
+    LanguageService:disable_filetype(filetype)
+  end,
   configure_lsp = function(config)
     LanguageService:configure_lsp(config)
   end,

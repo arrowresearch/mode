@@ -21,14 +21,27 @@ local LanguageService = {
   _by_root = {},
   _by_buffer = {},
   _config_by_filetype = {},
+  _enabled_by_filetype = {},
   _rtp_searched_by_filetype = {},
 }
+
+function LanguageService:enable_filetype(filetype)
+  self._enabled_by_filetype[filetype] = true
+end
+
+function LanguageService:disable_filetype(filetype)
+  self._enabled_by_filetype[filetype] = false
+end
 
 function LanguageService:configure_lsp(config)
   assert(config.id, 'missing id')
   assert(config.id, 'missing filetype')
   for _, filetype in ipairs(toarray(config.filetype)) do
-    self._config_by_filetype[filetype] = {type = 'lsp', config = config}
+    self._config_by_filetype[filetype] = {
+      type = 'lsp',
+      config = config,
+      enabled = true,
+    }
   end
 end
 
@@ -36,7 +49,11 @@ function LanguageService:configure_linter(config)
   assert(config.id, 'missing id')
   assert(config.id, 'missing filetype')
   for _, filetype in ipairs(toarray(config.filetype)) do
-    self._config_by_filetype[filetype] = {type = 'linter', config = config}
+    self._config_by_filetype[filetype] = {
+      type = 'linter',
+      config = config,
+      enabled = true,
+    }
   end
 end
 
@@ -118,6 +135,11 @@ function LanguageService:get(o)
   end
 
   local filetype = buffer.options.filetype
+
+  local enabled = self._enabled_by_filetype[filetype]
+  if enabled ~= nil and not enabled then
+    return nil, false
+  end
 
   -- Load configuration from &runtimepath/mode/filetype/&filetype.lua
   -- TODO(andreypopp): Need to move it closer to autocmd
