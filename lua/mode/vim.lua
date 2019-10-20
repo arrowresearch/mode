@@ -22,6 +22,10 @@ local function wait(force)
   async.yield()
 end
 
+local function wait_cb(cb)
+  vim.schedule(cb)
+end
+
 -- Proxy for convenient calls to vim functions.
 --
 -- Example (getting the current buffer filename):
@@ -352,14 +356,21 @@ local function termopen(o)
   ]], o.cmd, cb)
 end
 
+local function echomsg(m, ...)
+  m = string.format(m, ...)
+  execute([[ echomsg '%s' ]], m)
+end
+
 return {
   _vim = vim,
   Buffer = Buffer,
   call = call,
   execute = execute,
   wait = wait,
+  wait_cb = wait_cb,
   show = show,
   autocommand = autocommand,
   termopen = termopen,
-  callback = callback
+  callback = callback,
+  echomsg = echomsg,
 }
