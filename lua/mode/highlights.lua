@@ -3,6 +3,9 @@
 local util = require 'mode.util'
 local vim = require 'mode.vim'
 
+-- API for highlighting rangers within a buffer
+--
+-- Uses 0-based line and column numbers.
 local Highlights = util.Object:extend()
 
 function Highlights:init(o)
