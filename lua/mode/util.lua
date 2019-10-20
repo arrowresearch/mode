@@ -74,6 +74,18 @@ local function table_is_array(t)
   return type(t) == 'table' and (#t > 0 or next(t) == nil)
 end
 
+local function table_concat(t, sep)
+  local res = ""
+  for i, v in ipairs(t) do
+    if i == 1 then
+      res = v
+    else
+      res = res .. sep .. v
+    end
+  end
+  return res
+end
+
 local function array_copy(t)
   local copy = {}
   for i, v in ipairs(t) do
@@ -96,6 +108,7 @@ return {
   LinkedList = LinkedList,
   table_pack = table_pack,
   table_is_array = table_is_array,
+  table_concat = table_concat,
   array_copy = array_copy,
   errorf = errorf,
   error = error,
