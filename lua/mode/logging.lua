@@ -12,13 +12,24 @@ function Log:init(_)
   self.buffer:set_name('** mode **')
 end
 
+local function escape_whitespace(str)
+  if str:find("[%s]") then
+    str = str:gsub("\n", "\\n")
+    str = str:gsub("\r", "\\r")
+    str = str:gsub("\t", "\\t")
+    return str
+  else
+    return str
+  end
+end
+
 function Log:info(logger, msg, ...)
   vim.wait()
   msg = string.format(msg, ...)
   local time = vim.call.strftime('%T', vim.call.localtime())
   local line = string.format('%s %s %s', time, logger, msg)
   self.buffer.options.modifiable = true
-  self.buffer:append_lines({line})
+  self.buffer:append_lines({escape_whitespace(line)})
   self.buffer.options.modifiable = false
 end
 
