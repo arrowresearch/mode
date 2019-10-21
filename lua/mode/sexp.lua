@@ -35,9 +35,20 @@ local function parse_string(state)
     local c = state.next()
     if c == nil or (c == '"' and not escape) then
       break
+    elseif c == 'n' and escape then
+      escape = false
+      res = res .. '\n'
+    elseif c == 'r' and escape then
+      escape = false
+      res = res .. '\r'
+    elseif c == 't' and escape then
+      escape = false
+      res = res .. '\t'
+    elseif c == '\\' and escape then
+      escape = false
+      res = res .. '\\'
     elseif c == '\\' then
       escape = true
-      res = res .. c
     else
       escape = false
       res = res .. c
