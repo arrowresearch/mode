@@ -11,10 +11,11 @@ command! CoqModeInit lua require('mode.coq').init()
 command! CoqModeStop lua require('mode.coq').stop()
 command! CoqModeNext lua require('mode.coq').next()
 command! CoqModePrev lua require('mode.coq').prev()
-command! CoqModeAddTillCursor lua require('mode.coq').add_till_cursor()
+command! CoqModeAtPosition lua require('mode.coq').at_position()
 
-nnoremap <leader>cc <Cmd>CoqModeAddTillCursor<Cr>
+nnoremap <leader>cc <Cmd>CoqModeAtPosition<Cr>
 nnoremap <leader>cp <Cmd>CoqModePrev<Cr>
+nnoremap <leader>cn <Cmd>CoqModeNext<Cr>
 
 highlight link ModeError ErrorMsg
 highlight link ModeWarning WarningMsg

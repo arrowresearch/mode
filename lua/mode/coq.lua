@@ -42,6 +42,49 @@ local function byte2position(bp)
   return {bp = bp, lnum = lnum, coln = coln}
 end
 
+local function is_bullet(c)
+  return c == '.'
+      or c == '{'
+      or c == '}'
+      or c == '*'
+      or c == '-'
+      or c == '+'
+end
+
+local function find_next_sentence(buf, pos)
+  local text
+  if pos == nil then
+    text = buf:contents_lines()
+    text = util.table_concat(text, '\n')
+  else
+    text = buf:contents_lines(pos.lnum - 1)
+    text = util.table_concat(text, '\n')
+    text = text:sub(pos.coln + 1)
+  end
+
+  local sentence = ''
+  while #text > 0 do
+    -- TODO(andreypopp): handle nested comments
+    if text:sub(0, 2) == '(*' then
+      local _, comment_end = text:find("%*%)") -- find '*)'
+      if comment_end == nil then -- unclosed comment
+        return nil
+      end
+      text = text:sub(comment_end + 1)
+    end
+
+    local c = text:sub(0, 1)
+    if is_bullet(c) then
+      sentence = sentence .. c
+      return sentence
+    else
+      sentence = sentence .. c
+      text = text:sub(2)
+    end
+  end
+  return nil
+end
+
 local Coq = util.Object:extend()
 
 function Coq:init(_o)
@@ -49,6 +92,20 @@ function Coq:init(_o)
   self.log = logging.get_logger("coq")
   self.highlights = highlights.Highlights:new {name = 'coq'}
   self.buf = vim.Buffer:current()
+  self.buf_goals = vim.Buffer:create {
+    listed = false,
+    scratch = true,
+    modifiable = false
+  }
+  self.buf_goals:set_name('** goals **')
+
+  self.buf_messages = vim.Buffer:create {
+    listed = false,
+    scratch = true,
+    modifiable = false
+  }
+  self.buf_messages:set_name('** messages **')
+
   self.buf_watcher = BufferWatcher:new {
     buffer = self.buf,
     is_utf8 = false,
@@ -59,13 +116,23 @@ function Coq:init(_o)
 
   self.tip = nil
   self.error = nil
+  self.messages = {}
 
+  self:_layout()
   self.proc = self:_start_sertop()
   self.stop = read_lines(self.proc.stdout, function(line)
-    self.log:info("<<< " .. line)
+    self.log:info("<<< %s", line)
     local value = sexp.parse(line)
     local tag = value[1]
     if tag == "Feedback" then
+      local feedback = sexp.to_table(value[2])
+      local contents = feedback.contents
+      if contents ~= nil
+        and contents[1] == 'Message'
+        and contents[2] == 'Notice' then
+        local obj = {'CoqPp', contents[4]}
+        table.insert(self.messages, obj)
+      end
     elseif tag == "Answer" then
       local idx = value[2]
       local answer = value[3]
@@ -77,6 +144,10 @@ function Coq:init(_o)
         res.future:put(res)
       elseif answer[1] == "CoqExn" then
         table.insert(res.error, {"Error"})
+      elseif answer[1] == "ObjList" then
+        for _, obj in ipairs(answer[2]) do
+          table.insert(res.ok, obj)
+        end
       elseif answer[1] == "Added" then
         local id = answer[2]
         local info = sexp.to_table(answer[3])
@@ -91,6 +162,13 @@ function Coq:init(_o)
 
 end
 
+function Coq:_layout()
+  local winnr = vim.call.winnr()
+  vim.execute("vertical belowright sbuffer %i", self.buf_goals.id)
+  vim.execute("belowright sbuffer %i", self.buf_messages.id)
+  vim.execute("%iwincmd w", winnr)
+end
+
 function Coq:send(cmd)
   local future = async.Future:new()
   self.commands[self.commands_idx] = {
@@ -100,56 +178,98 @@ function Coq:send(cmd)
   }
   self.commands_idx = self.commands_idx + 1
   local line = sexp.print(cmd)
-  self.log:info(">>> " .. line)
+  self.log:info(">>> %s", line)
   self.proc.stdin:write(line)
   return future
 end
 
 function Coq:set_tip(tip, error)
   self.highlights:clear(self.buf)
-  if tip ~= nil then
-    local e = byte2position(tip.sentence.ep)
-    self.highlights:add {
-      range = {
-        start = {
-          line = 0,
-          character = 0,
+
+  -- Mark region as checked based on the new tip.
+  do
+    if tip ~= nil then
+      local e = byte2position(tip.sentence.ep)
+      self.highlights:add {
+        range = {
+          start = {
+            line = 0,
+            character = 0,
+          },
+          ['end'] = {
+            line = e.lnum - 1,
+            character = e.coln,
+          },
         },
-        ['end'] = {
-          line = e.lnum - 1,
-          character = e.coln,
-        },
-      },
-      hlgroup = 'CoqModeChecked',
-      buffer = self.buf,
-    }
+        hlgroup = 'CoqModeChecked',
+        buffer = self.buf,
+      }
+    end
   end
 
-  if error ~= nil then
-    local s = byte2position(error.sentence.bp)
-    local e = byte2position(error.sentence.ep)
-    vim.show({error, s, e})
-    Diagnostics:set(self.buf:filename(), {{
-      message = error.message,
-      range = {
-        start = {
-          line = s.lnum - 1,
-          character = s.coln,
+  -- Mark region as error based on a the new error.
+  do
+    if error ~= nil then
+      local s = byte2position(error.sentence.bp)
+      local e = byte2position(error.sentence.ep)
+      Diagnostics:set(self.buf:filename(), {{
+        message = error.message,
+        range = {
+          start = {
+            line = s.lnum - 1,
+            character = s.coln,
+          },
+          ['end'] = {
+            line = e.lnum - 1,
+            character = e.coln,
+          },
         },
-        ['end'] = {
-          line = e.lnum - 1,
-          character = e.coln,
-        },
-      },
-    }})
-    Diagnostics:update()
-  else
-    Diagnostics:set(self.buf:filename(), {})
-    Diagnostics:update()
+      }})
+      Diagnostics:update()
+    else
+      Diagnostics:set(self.buf:filename(), {})
+      Diagnostics:update()
+    end
+  end
+
+  -- Update messages if any were found.
+  do
+    if #self.messages > 0 then
+      local messages = self.messages
+      self.messages = {}
+      self.buf_messages:set_lines(self:print(messages))
+    else
+      self.buf_messages:set_lines({})
+    end
+  end
+
+  -- Update goals.
+  do
+    local query_opt = sexp.of_table {limit = nil, preds = {}}
+    local goals = self:send({"Query", query_opt, 'Goals'}):wait()
+    local goals_lines = self:print(goals.ok)
+    self.buf_goals:set_lines(goals_lines)
   end
 
   self.tip = tip
   self.error = error
+end
+
+-- Print a coq_obj list into a string list.
+function Coq:print(objs)
+  local lines = {}
+  for _, obj in ipairs(objs) do
+    local print_opt = sexp.of_table {pp_format = 'PpStr'}
+    local pp = self:send({"Print", print_opt, obj}):wait()
+    for _, v in ipairs(pp.ok) do
+      assert(v[1] == 'CoqString')
+      local vlines = v[2]
+      for line in vlines:gmatch("[^\r\n]+") do
+          table.insert(lines, line)
+      end
+    end
+  end
+  return lines
 end
 
 function Coq:prev()
@@ -161,7 +281,16 @@ function Coq:prev()
   self:set_tip(tip.parent, nil)
 end
 
-function Coq:add_till_cursor()
+function Coq:next()
+  local pos = nil
+  if self.tip ~= nil then
+    pos = byte2position(self.tip.sentence.ep)
+  end
+  local sentence = find_next_sentence(self.buf, pos)
+  return self:_add(self.tip, sentence)
+end
+
+function Coq:at_position()
   local pos = current_position()
   local lines = self.buf:contents_lines(0, pos.lnum)
   local len = #lines
@@ -177,6 +306,11 @@ function Coq:add_till_cursor()
     else
       body = body .. line
     end
+  end
+
+  if not is_bullet(body:sub(-1)) then
+    local next_sentence = find_next_sentence(self.buf, pos)
+    body = body .. next_sentence
   end
 
   local tip = self.tip
@@ -196,10 +330,17 @@ function Coq:add_till_cursor()
     self:send({"Cancel", to_cancel}):wait()
   end
 
+  if tip ~= nil then
+    body = body:sub(tip.sentence.ep + 1)
+  end
+
+  return self:_add(tip, body)
+end
+
+function Coq:_add(tip, body)
   local opts = {}
   if tip ~= nil then
     opts = sexp.of_table { ontop = tip.sentence.id }
-    body = body:sub(tip.sentence.ep + 1)
   end
 
   local add = self:send({"Add", opts, body}):wait()
@@ -301,14 +442,33 @@ vim.autocommand.register {
   end
 }
 
-return {
-  init = function() async.task(function()
+local function init()
+  async.task(function()
     coq = Coq:new()
-  end) end,
-  prev = function() async.task(function()
+  end)
+end
+
+local function prev()
+  async.task(function()
     coq:prev()
-  end) end,
-  add_till_cursor = function() async.task(function()
-    coq:add_till_cursor()
-  end) end,
+  end)
+end
+
+local function next()
+  async.task(function()
+    coq:next()
+  end)
+end
+
+local function at_position()
+  async.task(function()
+    coq:at_position()
+  end)
+end
+
+return {
+  init = init,
+  prev = prev,
+  next = next,
+  at_position = at_position,
 }
