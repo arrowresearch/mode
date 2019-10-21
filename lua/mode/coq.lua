@@ -43,43 +43,65 @@ local function byte2position(bp)
 end
 
 local function is_bullet(c)
-  return c == '.'
-      or c == '{'
-      or c == '}'
-      or c == '*'
+  return c == '*'
       or c == '-'
       or c == '+'
 end
 
+local function is_punc(c)
+  return c == '.'
+      or c == '{'
+      or c == '}'
+end
+
 local function find_next_sentence(buf, pos)
+  local start_of_line
   local text
   if pos == nil then
     text = buf:contents_lines()
     text = util.table_concat(text, '\n')
+    start_of_line = true
   else
     text = buf:contents_lines(pos.lnum - 1)
     text = util.table_concat(text, '\n')
     text = text:sub(pos.coln + 1)
+    start_of_line = false
   end
 
   local sentence = ''
   while #text > 0 do
     -- TODO(andreypopp): handle nested comments
     if text:sub(0, 2) == '(*' then
+      start_of_line = false
       local _, comment_end = text:find("%*%)") -- find '*)'
       if comment_end == nil then -- unclosed comment
         return nil
       end
+      sentence = sentence .. text:sub(0, comment_end)
       text = text:sub(comment_end + 1)
-    end
-
-    local c = text:sub(0, 1)
-    if is_bullet(c) then
-      sentence = sentence .. c
-      return sentence
     else
-      sentence = sentence .. c
-      text = text:sub(2)
+      local c = text:sub(0, 1)
+      if c == '"' then
+      -- TODO(andreypopp): handle escapes
+        local _, s_end = text:sub(2):find('"') -- find end of string
+        sentence = sentence .. text:sub(0, s_end + 1)
+        text = text:sub(s_end + 2)
+      elseif c == '\n' then
+        local _, ws_end = text:find("[^%s]") -- find non whitespace
+        sentence = sentence .. text:sub(0, ws_end - 1)
+        text = text:sub(ws_end)
+        start_of_line = true
+      elseif is_bullet(c) and start_of_line then
+        sentence = sentence .. c
+        return sentence
+      elseif is_punc(c) then
+        sentence = sentence .. c
+        return sentence
+      else
+        start_of_line = false
+        sentence = sentence .. c
+        text = text:sub(2)
+      end
     end
   end
   return nil
@@ -308,11 +330,6 @@ function Coq:at_position()
     end
   end
 
-  if not is_bullet(body:sub(-1)) then
-    local next_sentence = find_next_sentence(self.buf, pos)
-    body = body .. next_sentence
-  end
-
   local tip = self.tip
   local to_cancel = {}
   while tip ~= nil do
@@ -450,18 +467,21 @@ end
 
 local function prev()
   async.task(function()
+    if coq == nil then coq = Coq:new() end
     coq:prev()
   end)
 end
 
 local function next()
   async.task(function()
+    if coq == nil then coq = Coq:new() end
     coq:next()
   end)
 end
 
 local function at_position()
   async.task(function()
+    if coq == nil then coq = Coq:new() end
     coq:at_position()
   end)
 end
