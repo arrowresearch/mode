@@ -194,9 +194,9 @@ vim.autocommand.register {
       local mode = vim._vim.api.nvim_get_mode().mode
       local diag = current_diagnostic(ev.buffer)
       if diag and mode:sub(1, 1) == 'n' then
-        Modal:open(ev.buffer, diag.message)
+        vim.echo(diag.message)
       else
-        Modal:close()
+        vim.echo('')
       end
     end)
   end

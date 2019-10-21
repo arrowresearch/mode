@@ -12,13 +12,13 @@ local Diagnostics = {
   },
   use_errors_signs = signs.Signs:new {
     name = 'mode-diag-errors',
-    text = '✖',
+    text = '▐',
     texthl = 'ModeError',
     priority = 100,
   },
   use_warnings_signs = signs.Signs:new {
     name = 'mode-diag-warnings',
-    text = '✖',
+    text = '▐',
     texthl = 'ModeWarning',
     priority = 90,
   },

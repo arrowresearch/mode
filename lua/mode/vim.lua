@@ -361,6 +361,11 @@ local function echomsg(m, ...)
   execute([[ echomsg '%s' ]], m)
 end
 
+local function echo(m, ...)
+  m = string.format(m, ...)
+  execute([[ echo '%s' ]], m)
+end
+
 return {
   _vim = vim,
   Buffer = Buffer,
@@ -373,4 +378,5 @@ return {
   termopen = termopen,
   callback = callback,
   echomsg = echomsg,
+  echo = echo,
 }
