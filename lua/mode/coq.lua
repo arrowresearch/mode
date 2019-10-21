@@ -109,7 +109,7 @@ end
 
 local Coq = util.Object:extend()
 
-function Coq:init(_o)
+function Coq:init(_)
   self.cwd = nil
   self.log = logging.get_logger("coq")
   self.highlights = highlights.Highlights:new {name = 'coq'}
@@ -294,25 +294,29 @@ function Coq:print(objs)
   return lines
 end
 
-function Coq:prev()
+function Coq:prev(o)
   if self.tip == nil then
     return
   end
   local tip = self.tip
   self:send({"Cancel", {tip.sentence.id}}):wait()
   self:set_tip(tip.parent, nil)
+  if o and o.jump and tip then
+    local pos = byte2position(tip.sentence.ep)
+    vim.call.cursor(pos.lnum, pos.coln)
+  end
 end
 
-function Coq:next()
+function Coq:next(o)
   local pos = nil
   if self.tip ~= nil then
     pos = byte2position(self.tip.sentence.ep)
   end
   local sentence = find_next_sentence(self.buf, pos)
-  return self:_add(self.tip, sentence)
+  return self:_add(self.tip, sentence, o)
 end
 
-function Coq:at_position()
+function Coq:at_position(o)
   local pos = current_position()
   local lines = self.buf:contents_lines(0, pos.lnum)
   local len = #lines
@@ -351,10 +355,10 @@ function Coq:at_position()
     body = body:sub(tip.sentence.ep + 1)
   end
 
-  return self:_add(tip, body)
+  return self:_add(tip, body, o)
 end
 
-function Coq:_add(tip, body)
+function Coq:_add(tip, body, o)
   local opts = {}
   if tip ~= nil then
     opts = sexp.of_table { ontop = tip.sentence.id }
@@ -408,6 +412,10 @@ function Coq:_add(tip, body)
     }
   end
   self:set_tip(next_tip, error)
+  if o and o.jump and next_tip then
+    local pos = byte2position(next_tip.sentence.ep)
+    vim.call.cursor(pos.lnum, pos.coln)
+  end
 end
 
 function Coq:shutdown()
@@ -465,24 +473,24 @@ local function init()
   end)
 end
 
-local function prev()
+local function prev(o)
   async.task(function()
     if coq == nil then coq = Coq:new() end
-    coq:prev()
+    coq:prev(o)
   end)
 end
 
-local function next()
+local function next(o)
   async.task(function()
     if coq == nil then coq = Coq:new() end
-    coq:next()
+    coq:next(o)
   end)
 end
 
-local function at_position()
+local function at_position(o)
   async.task(function()
     if coq == nil then coq = Coq:new() end
-    coq:at_position()
+    coq:at_position(o)
   end)
 end
 
