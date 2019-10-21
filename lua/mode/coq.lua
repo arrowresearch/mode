@@ -6,6 +6,7 @@ local async = require 'mode.async'
 local sexp = require 'mode.sexp'
 local highlights = require 'mode.highlights'
 local BufferWatcher = require 'mode.buffer_watcher'
+local Diagnostics = require 'mode.diagnostics'
 
 local function read_lines(stream, f)
   local prev = ""
@@ -46,7 +47,6 @@ local Coq = util.Object:extend()
 function Coq:init(_o)
   self.cwd = nil
   self.log = logging.get_logger("coq")
-  self.tip = nil
   self.highlights = highlights.Highlights:new {name = 'coq'}
   self.buf = vim.Buffer:current()
   self.buf_watcher = BufferWatcher:new {
@@ -56,6 +56,9 @@ function Coq:init(_o)
   self.buf_watcher.updates:subscribe(function(...) self:_on_buf_update(...) end)
   self.commands = {}
   self.commands_idx = 0
+
+  self.tip = nil
+  self.error = nil
 
   self.proc = self:_start_sertop()
   self.stop = read_lines(self.proc.stdout, function(line)
@@ -102,7 +105,7 @@ function Coq:send(cmd)
   return future
 end
 
-function Coq:set_tip(tip)
+function Coq:set_tip(tip, error)
   self.highlights:clear(self.buf)
   if tip ~= nil then
     local e = byte2position(tip.sentence.ep)
@@ -121,7 +124,32 @@ function Coq:set_tip(tip)
       buffer = self.buf,
     }
   end
+
+  if error ~= nil then
+    local s = byte2position(error.sentence.bp)
+    local e = byte2position(error.sentence.ep)
+    vim.show({error, s, e})
+    Diagnostics:set(self.buf:filename(), {{
+      message = error.message,
+      range = {
+        start = {
+          line = s.lnum - 1,
+          character = s.coln,
+        },
+        ['end'] = {
+          line = e.lnum - 1,
+          character = e.coln,
+        },
+      },
+    }})
+    Diagnostics:update()
+  else
+    Diagnostics:set(self.buf:filename(), {})
+    Diagnostics:update()
+  end
+
   self.tip = tip
+  self.error = error
 end
 
 function Coq:prev()
@@ -130,7 +158,7 @@ function Coq:prev()
   end
   local tip = self.tip
   self:send({"Cancel", {tip.sentence.id}}):wait()
-  self:set_tip(tip.parent)
+  self:set_tip(tip.parent, nil)
 end
 
 function Coq:add_till_cursor()
@@ -161,7 +189,7 @@ function Coq:add_till_cursor()
     table.insert(to_cancel, tip.sentence.id)
     tip = tip.parent
   end
-  self:set_tip(tip)
+  self:set_tip(tip, nil)
 
   if #to_cancel > 0 then
     -- Ignoring errors on cancel, it seems like it does more than needed.
@@ -179,10 +207,30 @@ function Coq:add_till_cursor()
 
   local invalid = {}
   local valid = {}
+  local error = nil
   for _, sentence in ipairs(sentences) do
+
+    -- Fixup bp and ep as they are reported against ontop
+    sentence = {
+      id = sentence.id,
+      bp = tip and tip.sentence.ep + sentence.bp or sentence.bp,
+      ep = tip and tip.sentence.ep + sentence.ep or sentence.ep,
+    }
+
+    -- Need to Exec each sentence to check it's validity
     local exec = self:send({"Exec", sentence.id}):wait()
+
+    -- We partition sentences into valid and invalid.
     if #exec.error ~= 0 then
       table.insert(invalid, sentence.id)
+      -- Report first error.
+      if error == nil then
+        error = {
+          message = "Error here!",
+          sentence = sentence
+        }
+      end
+      -- Collect all additions before the first error
     elseif #invalid == 0 then
       table.insert(valid, sentence)
     end
@@ -198,15 +246,10 @@ function Coq:add_till_cursor()
   for _, sentence in ipairs(valid) do
     next_tip = {
       parent = next_tip,
-      sentence = {
-        id = sentence.id,
-        -- fixup bp/ep offset
-        bp = tip and tip.sentence.ep + sentence.bp or sentence.bp,
-        ep = tip and tip.sentence.ep + sentence.ep or sentence.ep,
-      }
+      sentence = sentence,
     }
   end
-  self:set_tip(next_tip)
+  self:set_tip(next_tip, error)
 end
 
 function Coq:shutdown()
@@ -230,7 +273,7 @@ function Coq:_on_buf_update(update)
     end
     if #to_cancel > 0 then
       self:send({"Cancel", to_cancel}):wait()
-      self:set_tip(tip)
+      self:set_tip(tip, nil)
     end
   end)
 end
