@@ -32,7 +32,7 @@ function BufferWatcher:_start()
       local start_coln = nil
       if self.track_start_column then
         local line_1 = self.lines[start + 1]
-        local updated_lines = self.buffer:contents_lines(start, stop)
+        local updated_lines = self.buffer:contents_lines(start, stopped)
         local updated_line_1 = updated_lines[1]
 
         start_coln = 1
