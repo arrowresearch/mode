@@ -293,6 +293,10 @@ function autocommand.register(o)
     eventstring = eventstring .. " " .. o.pattern
   end
 
+  if o.buffer ~= nil then
+    eventstring = eventstring .. string.format(" <buffer=%i>", o.buffer.id)
+  end
+
   _autocommand_id = _autocommand_id + 1
   local id = _autocommand_id
   local group = "_lua_group_" .. tostring(id)
