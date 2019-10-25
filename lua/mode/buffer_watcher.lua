@@ -36,40 +36,26 @@ function BufferWatcher:_start()
         local updated_line_1 = updated_lines[1]
 
         -- Compare first line of the change
-        start_coln = 0
+        start_coln = line_1 and #line_1 or 0
         if updated_line_1 ~= nil and line_1 ~= nil then
-          for ch in line_1:gmatch(".") do
-            local updated_ch = string.char(updated_line_1:byte(start_coln + 1))
-            if ch ~= updated_ch then
-              start_coln = start_coln
+          for i = 1,#line_1 do
+            if line_1:byte(i) ~= updated_line_1:byte(i) then
+              start_coln = i - 1 -- make it 0-based
               break
             end
-            start_coln = start_coln + 1
           end
         end
 
         -- Update self.lines with updated lines
         local new_lines = {}
-        -- Before
-        local lnum = 1
-        while lnum < start + 1 do
+        for lnum = 1,start do
           table.insert(new_lines, self.lines[lnum])
-          lnum = lnum + 1
         end
-        -- updates
         for _,line in ipairs(updated_lines) do
           table.insert(new_lines, line)
         end
-        -- After
-        lnum = stop + 1
-        while true do
-          local line = self.lines[lnum]
-          if line == nil then
-            break
-          else
-            table.insert(new_lines, line)
-            lnum = lnum + 1
-          end
+        for lnum = stop+1,#self.lines do
+          table.insert(new_lines, self.lines[lnum])
         end
         self.lines = new_lines
       end
