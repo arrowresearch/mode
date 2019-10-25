@@ -88,6 +88,9 @@ local function find_next_sentence(buf, pos)
         text = text:sub(s_end + 2)
       elseif c == '\n' then
         local _, ws_end = text:find("[^%s]") -- find non whitespace
+        if ws_end == nil then
+          return nil -- eof
+        end
         sentence = sentence .. text:sub(0, ws_end - 1)
         text = text:sub(ws_end)
         start_of_line = true
