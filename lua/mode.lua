@@ -192,6 +192,9 @@ vim.autocommand.register {
   action = function(ev)
     async.task(function()
       local mode = vim._vim.api.nvim_get_mode().mode
+      if not ev.buffer:exists() then
+        return
+      end
       local diag = current_diagnostic(ev.buffer)
       if diag and mode:sub(1, 1) == 'n' then
         vim.echo(diag.message)

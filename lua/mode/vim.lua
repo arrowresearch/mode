@@ -145,6 +145,11 @@ function Buffer:contents()
   return table.concat(lines, '\n')
 end
 
+function Buffer:exists()
+  -- TODO(andreypopp): is it an adequate way to check if the buffer is valid?
+  return call.bufname(self.id) ~= ''
+end
+
 --
 -- Autocommands
 --
