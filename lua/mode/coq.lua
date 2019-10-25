@@ -131,6 +131,7 @@ function Coq:init(_)
   self.buf_watcher = BufferWatcher:new {
     buffer = self.buf,
     is_utf8 = false,
+    track_start_column = true,
   }
   self.buf_watcher.updates:subscribe(function(...) self:_on_buf_update(...) end)
   self.commands = {}
@@ -428,10 +429,13 @@ function Coq:_on_buf_update(update)
   async.task(function()
     local lnum = update.start + 1
     local bp = vim.call.line2byte(lnum) - 1
+    if update.start_coln ~= nil then
+      bp = bp + update.start_coln
+    end
     local tip = self.tip
     local to_cancel = {}
     while tip ~= nil do
-      if tip.sentence.ep < bp then
+      if tip.sentence.ep <= bp then
         break
       end
       table.insert(to_cancel, tip.sentence.id)
