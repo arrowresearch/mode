@@ -113,6 +113,7 @@ end
 local Coq = util.Object:extend()
 
 function Coq:init(_)
+  self.exiting = false -- set by autocommand below
   self.cwd = nil
   self.log = logging.get_logger("coq")
   self.highlights = highlights.Highlights:new {name = 'coq'}
@@ -144,8 +145,26 @@ function Coq:init(_)
   self.error = nil
   self.messages = {}
 
-  self:_layout()
+  self:show()
+
   self.proc = self:_start_sertop()
+
+  vim.autocommand.register {
+    event = {vim.autocommand.BufLeave},
+    buffer = self.buf,
+    action = function(_)
+      self:hide()
+    end
+  }
+
+  vim.autocommand.register {
+    event = {vim.autocommand.BufEnter},
+    buffer = self.buf,
+    action = function(_)
+      self:show()
+    end
+  }
+
   self.stop = read_lines(self.proc.stdout, function(line)
     self.log:info("<<< %s", line)
     local value = sexp.parse(line)
@@ -189,10 +208,10 @@ function Coq:init(_)
 end
 
 function Coq:_layout()
-  local winnr = vim.call.winnr()
+  local main_win_id = vim.call.win_getid()
   vim.execute("vertical belowright sbuffer %i", self.buf_goals.id)
   vim.execute("belowright sbuffer %i", self.buf_messages.id)
-  vim.execute("%iwincmd w", winnr)
+  vim.call.win_gotoid(main_win_id)
 end
 
 function Coq:send(cmd)
@@ -422,6 +441,28 @@ function Coq:_add(tip, body, o)
   end
 end
 
+function Coq:hide()
+  if self.exiting then
+    return
+  end
+  for _, buf in ipairs({self.buf_goals, self.buf_messages}) do
+    local win = buf:window()
+    if win ~= nil then
+      local num = win:number()
+      if num > 1 then -- do not close the last window
+        win:close {force = true}
+      end
+    end
+  end
+end
+
+function Coq:show()
+  local main_win = vim.Window:current()
+  vim.execute("vertical belowright sbuffer %i", self.buf_goals.id)
+  vim.execute("belowright sbuffer %i", self.buf_messages.id)
+  main_win:focus()
+end
+
 function Coq:shutdown()
   self.stop()
   self.buf_watcher:shutdown()
@@ -468,6 +509,7 @@ vim.autocommand.register {
   action = function()
     if coq ~= nil then
       async.task(function()
+        coq.exiting = true
         coq:shutdown():wait()
       end)
     end
