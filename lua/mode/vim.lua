@@ -54,6 +54,43 @@ local function execute(cmd, ...)
 end
 
 --
+-- Wrap window API
+--
+
+local Window = util.Object:extend()
+
+function Window.__eq(a, b)
+  return a.id == b.id
+end
+
+function Window:init(id)
+  self.id = id
+end
+
+function Window:current()
+  local id = call.win_getid()
+  return self:new(id)
+end
+
+function Window:focus()
+  call.win_gotoid(self.id)
+end
+
+function Window:number()
+  local number = call.win_id2win(self.id)
+  if number == 0 then
+    return nil
+  else
+    return number
+  end
+end
+
+function Window:close(o)
+  o = o or {force = false}
+  vim.api.nvim_win_close(self.id, o.force)
+end
+
+--
 -- Wrap buffer API
 --
 
@@ -121,6 +158,15 @@ end
 
 function Buffer:changedtick()
   return vim.api.nvim_buf_get_changedtick(self.id)
+end
+
+function Buffer:window()
+  local win_id = call.bufwinid(self.id)
+  if win_id == -1 then
+    return nil
+  else
+    return Window:new(win_id)
+  end
 end
 
 function Buffer:append_lines(lines)
@@ -378,6 +424,7 @@ end
 return {
   _vim = vim,
   Buffer = Buffer,
+  Window = Window,
   call = call,
   execute = execute,
   wait = wait,
