@@ -188,7 +188,14 @@ function Coq:init(_)
         self.commands[idx] = nil
         res.future:put(res)
       elseif answer[1] == "CoqExn" then
-        table.insert(res.error, {"Error"})
+        local msg
+        local err_repr = answer[5]
+        if err_repr[1] == "CErrors.UserError" then
+          msg = err_repr[2][2]
+        elseif err_repr[1] == "ExplainErr.EvaluatedError" then
+          msg = err_repr[2]
+        end
+        table.insert(res.error, {msg or "Error"})
       elseif answer[1] == "ObjList" then
         for _, obj in ipairs(answer[2]) do
           table.insert(res.ok, obj)
@@ -252,30 +259,7 @@ function Coq:set_tip(tip, error)
     end
   end
 
-  -- Mark region as error based on a the new error.
-  do
-    if error ~= nil then
-      local s = byte2position(error.sentence.bp)
-      local e = byte2position(error.sentence.ep)
-      Diagnostics:set(self.buf:filename(), {{
-        message = error.message,
-        range = {
-          start = {
-            line = s.lnum - 1,
-            character = s.coln,
-          },
-          ['end'] = {
-            line = e.lnum - 1,
-            character = e.coln,
-          },
-        },
-      }})
-      Diagnostics:update()
-    else
-      Diagnostics:set(self.buf:filename(), {})
-      Diagnostics:update()
-    end
-  end
+  self:set_error(error)
 
   -- Update messages if any were found.
   do
@@ -298,6 +282,30 @@ function Coq:set_tip(tip, error)
 
   self.tip = tip
   self.error = error
+end
+
+function Coq:set_error(error)
+  if error ~= nil then
+    local s = byte2position(error.sentence.bp)
+    local e = byte2position(error.sentence.ep)
+    Diagnostics:set(self.buf:filename(), {{
+      message = error.message,
+      range = {
+        start = {
+          line = s.lnum - 1,
+          character = s.coln,
+        },
+        ['end'] = {
+          line = e.lnum - 1,
+          character = e.coln,
+        },
+      },
+    }})
+    Diagnostics:update()
+  else
+    Diagnostics:set(self.buf:filename(), {})
+    Diagnostics:update()
+  end
 end
 
 -- Print a coq_obj list into a string list.
@@ -411,7 +419,7 @@ function Coq:_add(tip, body, o)
       -- Report first error.
       if error == nil then
         error = {
-          message = "Error here!",
+          message = exec.error[1][1],
           sentence = sentence
         }
       end
@@ -488,6 +496,8 @@ function Coq:_on_buf_update(update)
     if #to_cancel > 0 then
       self:send({"Cancel", to_cancel}):wait()
       self:set_tip(tip, nil)
+    elseif self.error and bp < self.error.sentence.ep then
+      self:set_error(nil)
     end
   end)
 end
