@@ -11,7 +11,7 @@ mode.configure_lsp {
       'exec-command',
       '--include-build-env',
       '--include-current-env',
-      '/Users/andreypopp/Workspace/esy-ocaml/merlin/ocamlmerlin-lsp'
+      'ocamlmerlin-lsp'
     }
     return cmd, args
   end,

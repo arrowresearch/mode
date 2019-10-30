@@ -103,7 +103,8 @@ local function hover()
         message = contents.value
       end
     end
-    Modal:open(buffer, message)
+    vim.echo(message)
+    -- Modal:open(buffer, message)
   end)
 end
 
