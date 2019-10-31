@@ -28,3 +28,11 @@ highlight link CoqModeAdded WarningMsg
 " TODO(andreypopp): fix it to a link to a semantic highlight group instead
 highlight CoqModeChecked ctermfg=2 ctermbg=NONE
 highlight link CoqModeError ErrorMsg
+
+function! ModeOmni(findstart, base) abort
+  if a:findstart
+    return luaeval("require('mode').complete_start()")
+  else
+    return luaeval("require('mode').complete(_A)", a:base)
+  endif
+endfunction

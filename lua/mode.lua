@@ -71,7 +71,6 @@ local function type_definition()
 end
 
 local function hover()
-  local buffer = vim.Buffer:current()
   local pos = lsp.TextDocumentPosition:current()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
@@ -106,6 +105,53 @@ local function hover()
     vim.echo(message)
     -- Modal:open(buffer, message)
   end)
+end
+
+local _completion
+
+local function call_completion(pos)
+  local params = pos
+  params.context = {triggerKind = 1}
+  local service = LanguageService:get { type = 'lsp' }
+  local resp = service.jsonrpc:request("textDocument/completion", params)
+  -- wait at most 3 seconds for a response
+  for _ = 1, 300 do
+    vim.execute "sleep 10m"
+    if resp:is_ready() then
+      break
+    end
+  end
+  if not resp:is_ready() then
+    return {}
+  end
+  local items = {}
+  for _, item in ipairs(resp.value.result.items) do
+    table.insert(items, item.label)
+  end
+  return items
+end
+
+local function complete_start()
+  local buf = vim.Buffer:current()
+  local pos = lsp.TextDocumentPosition:current()
+  local lines = buf:contents_lines(pos.position.line, pos.position.line + 1)
+  local line = lines[1]:sub(1, pos.position.character)
+  local coln
+  for i = #line, 1, -1 do
+    coln = i
+    local chunk = line:sub(i)
+    if chunk:find("[^%a%d_]") then
+      break
+    end
+  end
+  _completion = call_completion(pos)
+  return coln
+end
+
+local function complete()
+  local items = _completion or {}
+  _completion = nil
+  return items
 end
 
 local function prev_diagnostic_location(o)
@@ -232,4 +278,6 @@ return {
   hover = hover,
   next_diagnostic_location = next_diagnostic_location,
   prev_diagnostic_location = prev_diagnostic_location,
+  complete_start = complete_start,
+  complete = complete,
 }
