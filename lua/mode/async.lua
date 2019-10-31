@@ -74,6 +74,10 @@ function Future:init()
   self.listeners = LinkedList.empty
 end
 
+function Future:is_ready()
+  return self.value ~= Future.none
+end
+
 function Future:subscribe(f)
   if self.value ~= Future.none then
     f(self.value)
