@@ -110,6 +110,19 @@ local function make_buffer_options_proxy(id)
   return t
 end
 
+local function make_buffer_vars_proxy(id)
+  local t = {}
+  setmetatable(t, {
+    __index = function(_, k)
+      return vim.api.nvim_buf_get_var(id, k)
+    end,
+    __newindex = function(_, k, v)
+      return vim.api.nvim_buf_set_var(id, k, v)
+    end
+  })
+  return t
+end
+
 function Buffer.__eq(a, b)
   return a.id == b.id
 end
@@ -117,6 +130,7 @@ end
 function Buffer:init(id)
   self.id = id
   self.options = make_buffer_options_proxy(id)
+  self.vars = make_buffer_vars_proxy(id)
 end
 
 function Buffer:create(o)
