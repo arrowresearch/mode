@@ -74,18 +74,6 @@ local function table_is_array(t)
   return type(t) == 'table' and (#t > 0 or next(t) == nil)
 end
 
-local function table_concat(t, sep)
-  local res = ""
-  for i, v in ipairs(t) do
-    if i == 1 then
-      res = v
-    else
-      res = res .. sep .. v
-    end
-  end
-  return res
-end
-
 local function array_copy(t)
   local copy = {}
   for i, v in ipairs(t) do
@@ -102,13 +90,76 @@ local function _dofile(path)
   dofile(path.string)
 end
 
+local _string = {}
+
+function _string.lines(v, start, stop)
+  assert(start == nil or start > 0)
+  assert(stop == nil or stop > 1)
+  local lines = v:gmatch("[^\r\n]+")
+  local lnum = 1
+  return function()
+    if start ~= nil and lnum == 1 then
+      while lnum < start do
+        local _ = lines()
+        lnum = lnum + 1
+      end
+    end
+    if stop ~= nil and lnum > stop then
+      return nil
+    end
+    local line = lines()
+    lnum = lnum + 1
+    return line
+  end
+end
+
+local _iterator = {}
+
+function _iterator.concat(it, sep)
+  local res = ""
+  local i = 1
+  for v in it do
+    if i == 1 then
+      res = v
+    else
+      res = res .. sep .. v
+    end
+    i = i + 1
+  end
+  return res
+end
+
+local _table = {}
+
+function _table.from_iterator(it)
+  local res = {}
+  for item in it do
+    table.insert(res, item)
+  end
+  return res
+end
+
+function _table.concat(t, sep)
+  local res = ""
+  for i, v in ipairs(t) do
+    if i == 1 then
+      res = v
+    else
+      res = res .. sep .. v
+    end
+  end
+  return res
+end
+
 return {
+  string = _string,
+  table = _table,
+  iterator = _iterator,
   dofile = _dofile,
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
   table_is_array = table_is_array,
-  table_concat = table_concat,
   array_copy = array_copy,
   errorf = errorf,
   error = error,

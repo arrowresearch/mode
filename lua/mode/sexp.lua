@@ -166,7 +166,7 @@ local function print(sexpr)
     for _, v in ipairs(sexpr) do
       table.insert(inner, print(v))
     end
-    inner = util.table_concat(inner, " ")
+    inner = util.table.concat(inner, " ")
     return "(" .. inner .. ")"
   elseif t_sexpr == "string" then
     return quote(sexpr)

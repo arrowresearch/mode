@@ -59,11 +59,11 @@ local function find_next_sentence(buf, pos)
   local text
   if pos == nil then
     text = buf:contents_lines()
-    text = util.table_concat(text, '\n')
+    text = util.table.concat(text, '\n')
     start_of_line = true
   else
     text = buf:contents_lines(pos.lnum - 1)
-    text = util.table_concat(text, '\n')
+    text = util.table.concat(text, '\n')
     text = text:sub(pos.coln + 1)
     start_of_line = false
   end

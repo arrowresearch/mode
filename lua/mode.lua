@@ -256,7 +256,10 @@ vim.autocommand.register {
       end
       local diag = current_diagnostic(ev.buffer)
       if diag and mode:sub(1, 1) == 'n' then
-        vim.echo(diag.message)
+        local max_lines = vim.ui.options.cmdheight
+        local lines = util.string.lines(diag.message, 1, max_lines)
+        local msg = util.iterator.concat(lines, "\n")
+        vim.echo(msg)
       else
         vim.echo('')
       end

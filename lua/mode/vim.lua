@@ -92,6 +92,29 @@ function Window:close(o)
 end
 
 --
+-- UI
+--
+
+local function make_options_proxy()
+  local t = {}
+  setmetatable(t, {
+    __index = function(_, k)
+      return vim.api.nvim_get_option(k)
+    end,
+    __newindex = function(_, k, v)
+      return vim.api.nvim_set_option(k, v)
+    end
+  })
+  return t
+end
+
+local UI = util.Object:extend()
+
+function UI:init()
+  self.options = make_options_proxy()
+end
+
+--
 -- Wrap buffer API
 --
 
@@ -438,8 +461,11 @@ local function echo(m, ...)
   execute([[ echo '%s' ]], m)
 end
 
+local ui = UI:new()
+
 return {
   _vim = vim,
+  ui = ui,
   Buffer = Buffer,
   Window = Window,
   call = call,
