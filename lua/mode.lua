@@ -135,17 +135,28 @@ local function complete_start()
   local buf = vim.Buffer:current()
   local pos = lsp.TextDocumentPosition:current()
   local lines = buf:contents_lines(pos.position.line, pos.position.line + 1)
-  local line = lines[1]:sub(1, pos.position.character)
+  local line = lines[1]:sub(1, pos.position.character - 1)
+  -- Look back till we find non-alphanumeric chars
   local coln
   for i = #line, 1, -1 do
     coln = i
     local chunk = line:sub(i)
-    if chunk:find("[^%a%d_]") then
+    if chunk == "" or chunk:find("[^%a%d_]") then
       break
     end
   end
+  vim.show(coln)
+  local service = LanguageService:get { type = 'lsp' }
+  service:pause_did_change(buf)
+  vim.autocommand.register {
+    event = {vim.autocommand.CompleteDone},
+    buffer = buf,
+    action = function(_)
+      service:resume_did_change(buf)
+    end
+  }
   _completion = call_completion(pos)
-  return coln
+  return coln == 1 and 0 or coln
 end
 
 local function complete()

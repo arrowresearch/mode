@@ -64,6 +64,7 @@ function LSPClient:init(o)
   self.is_insert_mode = false
   self.is_utf8 = nil
 
+  self.buffers_pause_did_change = {}
   self.on_shutdown = async.Channel:new()
 
   self.capabilities = {
@@ -145,6 +146,9 @@ function LSPClient:did_close(buffer)
 end
 
 function LSPClient:did_change(change)
+  if self.buffers_pause_did_change[change.buffer.id] then
+    return
+  end
   self.initialized:wait()
   local lines = change.buffer:contents_lines(change.start, change.stopped)
   local text = table.concat(lines, "\n") .. ((change.stopped > change.start) and "\n" or "")
@@ -171,6 +175,31 @@ function LSPClient:did_change(change)
       }
     }
   })
+end
+
+function LSPClient:pause_did_change(buf)
+  self.buffers_pause_did_change[buf.id] = true
+end
+
+function LSPClient:resume_did_change(buf)
+  if not self.buffers_pause_did_change[buf.id] then
+    return
+  end
+  -- Send whole doc update
+  local lines = buf:contents_lines()
+  local text = table.concat(lines, "\n") .. "\n"
+  self.jsonrpc:notify("textDocument/didChange", {
+    textDocument = {
+      uri = uri_of_path(buf:filename()),
+      version = buf.vars.changedtick
+    },
+    contentChanges = {
+      {
+        text = text,
+      }
+    }
+  })
+  self.buffers_pause_did_change[buf.id] = false
 end
 
 function LSPClient:did_insert_enter(_)
