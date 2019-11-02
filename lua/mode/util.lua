@@ -132,6 +132,9 @@ end
 local _table = {}
 
 function _table.from_iterator(it)
+  if type(it) == 'table' then
+    return it
+  end
   local res = {}
   for item in it do
     table.insert(res, item)

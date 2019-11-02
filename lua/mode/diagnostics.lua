@@ -4,6 +4,7 @@ local util = require 'mode.util'
 local vim = require 'mode.vim'
 local highlights = require 'mode.highlights'
 local signs = require 'mode.signs'
+local async = require 'mode.async'
 
 local Diagnostics = {
   use_quickfix_list = true,
@@ -27,7 +28,8 @@ local Diagnostics = {
   empty_diagnostics = {
     counts = {total = 0, errors = 0, warnings = 0},
     items = {},
-  }
+  },
+  updates = async.Channel:new(),
 }
 
 function Diagnostics:get(filename)
@@ -172,6 +174,7 @@ function Diagnostics:update()
     vim.call.setqflist(qf, 'r')
   end
   self.updated = true
+  self.updates:put({})
 end
 
 -- Make sure we update diagnostics for a buffer we just openned up.

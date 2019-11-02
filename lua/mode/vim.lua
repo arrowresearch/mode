@@ -54,42 +54,8 @@ local function execute(cmd, ...)
   vim.api.nvim_command(cmd)
 end
 
---
--- Wrap window API
---
-
-local Window = util.Object:extend()
-
-function Window.__eq(a, b)
-  return a.id == b.id
-end
-
-function Window:init(id)
-  self.id = id
-end
-
-function Window:current()
-  local id = call.win_getid()
-  return self:new(id)
-end
-
-function Window:focus()
-  call.win_gotoid(self.id)
-end
-
-function Window:number()
-  local number = call.win_id2win(self.id)
-  if number == 0 then
-    return nil
-  else
-    return number
-  end
-end
-
-function Window:close(o)
-  o = o or {force = false}
-  vim.api.nvim_win_close(self.id, o.force)
-end
+local Window
+local Buffer
 
 --
 -- UI
@@ -115,10 +81,90 @@ function UI:init()
 end
 
 --
+-- Wrap window API
+--
+
+local function make_window_options_proxy(id)
+  local t = {}
+  setmetatable(t, {
+    __index = function(_, k)
+      if k == "width" then
+        return vim.api.nvim_win_get_width(id)
+      elseif k == "height" then
+        return vim.api.nvim_win_get_height(id)
+      else
+        return vim.api.nvim_win_get_option(id, k)
+      end
+    end,
+    __newindex = function(_, k, v)
+      if k == "width" then
+        return vim.api.nvim_win_set_width(id, v)
+      elseif k == "height" then
+        return vim.api.nvim_win_set_height(id, v)
+      else
+        return vim.api.nvim_win_set_option(id, k, v)
+      end
+    end
+  })
+  return t
+end
+
+Window = util.Object:extend()
+
+function Window.__eq(a, b)
+  return a.id == b.id
+end
+
+function Window:init(id)
+  self.options = make_window_options_proxy(id)
+  self.id = id
+end
+
+function Window:open_floating(o)
+  local id = vim.api.nvim_open_win(o.buf.id, o.enter or false, {
+    relative = o.relative,
+    style = o.stylem,
+    height = o.height,
+    width = o.width,
+    row = o.row,
+    col = o.col,
+  })
+  assert(id ~= 0, 'Error creating window')
+  return self:new(id)
+end
+
+function Window:current()
+  local id = call.win_getid()
+  return self:new(id)
+end
+
+function Window:focus()
+  call.win_gotoid(self.id)
+end
+
+function Window:number()
+  local number = call.win_id2win(self.id)
+  if number == 0 then
+    return nil
+  else
+    return number
+  end
+end
+
+function Window:buffer()
+  return Buffer:new(vim.api.nvim_win_get_buf(self.id))
+end
+
+function Window:close(o)
+  o = o or {force = false}
+  vim.api.nvim_win_close(self.id, o.force)
+end
+
+--
 -- Wrap buffer API
 --
 
-local Buffer = util.Object:extend()
+Buffer = util.Object:extend()
 
 local function make_buffer_options_proxy(id)
   local t = {}
@@ -151,15 +197,19 @@ function Buffer.__eq(a, b)
 end
 
 function Buffer:init(id)
-  self.id = id
   self.options = make_buffer_options_proxy(id)
   self.vars = make_buffer_vars_proxy(id)
+  self.id = id
 end
 
 function Buffer:create(o)
   o = o or {listed = true, scratch = false, modifiable = false}
   local id = vim.api.nvim_create_buf(o.listed, o.scratch)
-  return self:new(id)
+  local buf = self:new(id)
+  if o.lines ~= nil then
+    buf:set_lines(o.lines)
+  end
+  return buf
 end
 
 function Buffer:get_or_nil(id)
@@ -208,10 +258,20 @@ function Buffer:window()
 end
 
 function Buffer:append_lines(lines)
+  if type(lines) == "function" then
+    lines = util.table.from_iterator(lines)
+  elseif type(lines) == "string" then
+    lines = {lines}
+  end
   return vim.api.nvim_buf_set_lines(self.id, 0, 0, false, lines)
 end
 
 function Buffer:set_lines(lines, start, stop)
+  if type(lines) == "function" then
+    lines = util.table.from_iterator(lines)
+  elseif type(lines) == "string" then
+    lines = {lines}
+  end
   start = start == nil and 0 or start
   stop = stop == nil and -1 or stop
   return vim.api.nvim_buf_set_lines(self.id, start, stop, false, lines)
@@ -464,7 +524,7 @@ end
 local ui = UI:new()
 
 return {
-  _vim = vim,
+  _vim = vim, -- re-export for access
   ui = ui,
   Buffer = Buffer,
   Window = Window,

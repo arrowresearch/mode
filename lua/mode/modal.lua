@@ -1,41 +1,65 @@
+local util = require 'mode.util'
 local vim = require 'mode.vim'
 
 local Modal = {
   current = nil
 }
 
-function Modal:open(buffer, message)
-  if self.current then
-    vim._vim.api.nvim_win_close(self.current.win, true)
-    self.current = nil
+function Modal:open(o)
+  self:close()
+
+  assert(o.lines ~= nil)
+  local lines = util.table.from_iterator(o.lines)
+
+  local width = vim.Window:current().options.width
+  local height = math.max(math.min(o.size or 8, #lines + 2))
+
+  local row = 1
+
+  local content = {}
+  do
+    local top
+    if o.title then
+      local left = string.rep("━", width - #o.title - 2 - 1)
+      local right = "━"
+      top = left .. o.title .. right
+    else
+      top = string.rep("━", width - 2)
+    end
+    local bottom = string.rep("━", width - 2)
+    table.insert(content, top)
+    for i = 1, height - 2 do
+      table.insert(content, lines[i] or '')
+    end
+    table.insert(content, bottom)
   end
-  local win = vim.call.win_getid()
-  local width = vim._vim.api.nvim_win_get_width(win)
-  local height = vim._vim.api.nvim_win_get_height(win)
-  local size = 6
-  local fbuffer = vim.Buffer:create { listed = false, scratch = true }
-  local sep = string.rep("━", width)
-  local lines = {sep}
-  for line in string.gmatch(message, '([^\n\r]+)') do
-    table.insert(lines, line)
-  end
-  vim._vim.api.nvim_buf_set_lines(fbuffer.id, 0, -1, false, lines)
-  local fwin = vim._vim.api.nvim_open_win(fbuffer.id, false, {
-    relative = 'win',
+
+  local buf = vim.Buffer:create {
+    listed = false,
+    scratch = true,
+    lines = content,
+  }
+
+  local win = vim.Window:open_floating {
+    buf = buf,
+    enter = false,
+    relative = 'cursor',
     style = 'minimal',
-    height = size,
+    height = height,
     width = width,
-    row = height - size + 1,
+    row = row,
     col = 0,
-  })
-  assert(fwin ~= 0, 'Error creating window')
-  vim._vim.api.nvim_win_set_option(fwin, 'winhighlight', 'Normal:MyHighlight')
-  self.current = { win = fwin, buffer = buffer }
+  }
+  win.options.winhighlight = 'Normal:MyHighlight'
+  win.options.wrap = false
+  win.options.cursorline = false
+
+  self.current = {win = win, range = nil}
 end
 
 function Modal:close()
-  if self.current then
-    vim._vim.api.nvim_win_close(self.current.win, true)
+  if self.current ~= nil then
+    self.current.win:close { force = true }
     self.current = nil
   end
 end
@@ -43,6 +67,7 @@ end
 vim.autocommand.register {
   event = {
     vim.autocommand.InsertEnter,
+    vim.autocommand.CursorMoved,
   },
   pattern = '*',
   action = function()
@@ -56,7 +81,7 @@ vim.autocommand.register {
   },
   pattern = '*',
   action = function(ev)
-    if Modal.current and Modal.current.buffer ~= ev.buffer then
+    if Modal.current and Modal.current.win.buffer() ~= ev.buffer then
       Modal:close()
     end
   end

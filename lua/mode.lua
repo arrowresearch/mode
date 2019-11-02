@@ -79,6 +79,7 @@ local function hover()
       return
     end
 
+    local win = vim.Window:current()
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
     -- Check that we are at the same position
@@ -102,8 +103,11 @@ local function hover()
         message = contents.value
       end
     end
-    vim.echo(message)
-    -- Modal:open(buffer, message)
+    -- vim.echo(message)
+    Modal:open {
+      title = "[INFO]",
+      lines = util.string.lines(message),
+    }
   end)
 end
 
@@ -241,6 +245,22 @@ local function current_diagnostic(buffer)
   end
 end
 
+local function updateDiagnosticsModal(buf)
+  if not buf:exists() then
+    return
+  end
+  local mode = vim._vim.api.nvim_get_mode().mode:sub(1, 1)
+  local diag = current_diagnostic(buf)
+  if diag and mode == 'n' then
+    Modal:open {
+      title = "[ERROR]",
+      lines = util.string.lines(diag.message),
+    }
+  else
+    Modal:close()
+  end
+end
+
 vim.autocommand.register {
   event = {
     vim.autocommand.CursorMoved,
@@ -250,22 +270,16 @@ vim.autocommand.register {
   pattern = '*',
   action = function(ev)
     async.task(function()
-      local mode = vim._vim.api.nvim_get_mode().mode
-      if not ev.buffer:exists() then
-        return
-      end
-      local diag = current_diagnostic(ev.buffer)
-      if diag and mode:sub(1, 1) == 'n' then
-        local max_lines = vim.ui.options.cmdheight
-        local lines = util.string.lines(diag.message, 1, max_lines)
-        local msg = util.iterator.concat(lines, "\n")
-        vim.echo(msg)
-      else
-        vim.echo('')
-      end
+      updateDiagnosticsModal(ev.buffer)
     end)
   end
 }
+
+diagnostics.updates:subscribe(function()
+  async.task(function()
+    updateDiagnosticsModal(vim.Buffer:current())
+  end)
+end)
 
 return {
   diagnostics_count = function()
