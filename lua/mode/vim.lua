@@ -50,7 +50,8 @@ setmetatable(call, call_meta)
 --
 
 local function execute(cmd, ...)
-  vim.api.nvim_command(string.format(cmd, ...))
+  cmd = cmd:format(...)
+  vim.api.nvim_command(cmd)
 end
 
 --
@@ -412,12 +413,14 @@ local function termopen(o)
 end
 
 local function echomsg(m, ...)
-  m = string.format(m, ...)
+  m = m:gsub("%%", "%%%%")
+  m = m:format(...)
   execute([[ echomsg '%s' ]], m)
 end
 
 local function echo(m, ...)
-  m = string.format(m, ...)
+  m = m:gsub("%%", "%%%%")
+  m = m:format(...)
   execute([[ echo '%s' ]], m)
 end
 
