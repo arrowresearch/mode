@@ -6,8 +6,6 @@ local Modal = {
 }
 
 function Modal:open(o)
-  self:close()
-
   assert(o.lines ~= nil)
   local lines = util.table.from_iterator(o.lines)
 
@@ -34,6 +32,26 @@ function Modal:open(o)
     table.insert(content, bottom)
   end
 
+  local bailout = true
+  do
+    if self.current ~= nil and #self.current.content == #content then
+      for i = 1, #content do
+        if content[i] ~= self.current.content[i] then
+          bailout = false
+          break
+        end
+      end
+    else
+      bailout = false
+    end
+  end
+  if bailout then
+    return
+  end
+
+  vim.show("OPEN")
+  self:close()
+
   local buf = vim.Buffer:create {
     listed = false,
     scratch = true,
@@ -54,7 +72,7 @@ function Modal:open(o)
   win.options.wrap = false
   win.options.cursorline = false
 
-  self.current = {win = win, range = nil}
+  self.current = {win = win, content = content}
 end
 
 function Modal:close()
@@ -67,7 +85,6 @@ end
 vim.autocommand.register {
   event = {
     vim.autocommand.InsertEnter,
-    vim.autocommand.CursorMoved,
   },
   pattern = '*',
   action = function()

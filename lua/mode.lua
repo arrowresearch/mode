@@ -245,7 +245,7 @@ local function current_diagnostic(buffer)
   end
 end
 
-local function updateDiagnosticsModal(buf)
+local function update_diagnostics_modal(buf)
   if not buf:exists() then
     return
   end
@@ -270,14 +270,14 @@ vim.autocommand.register {
   pattern = '*',
   action = function(ev)
     async.task(function()
-      updateDiagnosticsModal(ev.buffer)
+      update_diagnostics_modal(ev.buffer)
     end)
   end
 }
 
 diagnostics.updates:subscribe(function()
   async.task(function()
-    updateDiagnosticsModal(vim.Buffer:current())
+    update_diagnostics_modal(vim.Buffer:current())
   end)
 end)
 
