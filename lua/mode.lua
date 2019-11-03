@@ -79,19 +79,21 @@ local function hover()
       return
     end
 
-    local win = vim.Window:current()
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
-    -- Check that we are at the same position
-    local next_pos = lsp.TextDocumentPosition:current()
-    if next_pos ~= pos then
-      return
+    do
+      local next_pos = lsp.TextDocumentPosition:current()
+      if next_pos ~= pos then
+        return
+      end
+    end
+
+    if not resp.result then
+      vim.echo("mode: <no response>")
     end
 
     local message
-    if not resp.result then
-      message = "<no response>"
-    else
+    do
       local contents = resp.result.contents
       if util.table_is_array(contents) then
         local parts = {}
@@ -103,7 +105,7 @@ local function hover()
         message = contents.value
       end
     end
-    -- vim.echo(message)
+
     Modal:open {
       title = "[INFO]",
       lines = util.string.lines(message),

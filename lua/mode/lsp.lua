@@ -27,10 +27,7 @@ local TextDocumentPosition = util.Object:extend()
 
 function TextDocumentPosition:init(o)
   self.textDocument = {uri = o.uri}
-  self.position = Position:new {
-    line = o.line,
-    character = o.character,
-  }
+  self.position = o.position
 end
 
 function TextDocumentPosition.__eq(a, b)
@@ -38,15 +35,12 @@ function TextDocumentPosition.__eq(a, b)
 end
 
 function TextDocumentPosition:current()
-  local pos = vim.call.getpos('.')
-  local lnum = pos[2]
-  local col = pos[3]
+  local position = Position:current()
   local filename = vim.Buffer:current():filename()
   local uri = uri_of_path(filename)
   return self:new {
     uri = uri,
-    line = lnum - 1,
-    character = col - 1,
+    position = position,
   }
 end
 
