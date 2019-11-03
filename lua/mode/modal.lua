@@ -88,22 +88,12 @@ vim.autocommand.register {
   event = {
     vim.autocommand.InsertEnter,
     vim.autocommand.CmdlineEnter,
+    vim.autocommand.BufLeave,
+    vim.autocommand.BufEnter,
   },
   pattern = '*',
   action = function()
     Modal:close()
-  end
-}
-
-vim.autocommand.register {
-  event = {
-    vim.autocommand.BufEnter,
-  },
-  pattern = '*',
-  action = function(ev)
-    if Modal.current and Modal.current.win.buffer() ~= ev.buffer then
-      Modal:close()
-    end
   end
 }
 
