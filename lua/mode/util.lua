@@ -88,6 +88,10 @@ end
 
 local _string = {}
 
+function _string.starts_with(v, prefix)
+   return v:sub(1, #prefix) == prefix
+end
+
 function _string.lines(v, start, stop)
   assert(start == nil or start > 0)
   assert(stop == nil or stop > 1)

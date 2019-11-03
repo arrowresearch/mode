@@ -113,7 +113,35 @@ end
 
 local _completion
 
-local function call_completion(pos)
+local completion_kind_to_label = {
+	'',               -- 1 text
+	'method',         -- 2
+	'func',           -- 3
+	'constructor',    -- 4
+	'field',          -- 5
+	'var',            -- 6
+	'class',          -- 7
+	'interface',      -- 8
+	'module',         -- 9
+	'prop',           -- 10
+	'unit',           -- 11
+	'value',          -- 12
+	'enum',           -- 13
+	'keyword',        -- 14
+	'snippet',        -- 15
+	'color',          -- 16
+	'file',           -- 17
+	'ref',            -- 18
+	'folder',         -- 19
+	'enum member',    -- 20
+	'constant',       -- 21
+	'struct',         -- 22
+	'event',          -- 23
+	'operator',       -- 24
+  'type parameter', -- 25
+}
+
+local function call_completion(pos, prefix)
   local params = pos
   params.context = {triggerKind = 1}
   local service = LanguageService:get { type = 'lsp' }
@@ -130,7 +158,15 @@ local function call_completion(pos)
   end
   local items = {}
   for _, item in ipairs(resp.value.result.items) do
-    table.insert(items, item.label)
+    local word = item.label
+    local kind = ''
+    if item.kind ~= nil then
+      kind = completion_kind_to_label[item.kind] or ''
+    end
+
+    if not prefix or prefix and util.string.starts_with(word, prefix) then
+      table.insert(items, {word = word, menu = kind})
+    end
   end
   return items
 end
@@ -142,14 +178,17 @@ local function complete_start()
   local line = lines[1]:sub(1, pos.position.character)
   -- Look back till we find non-alphanumeric chars
   local coln
+  local prefix
   for i = #line, 1, -1 do
     coln = i
-    local chunk = line:sub(i)
-    if chunk == "" or chunk:find("[^a-zA-Z0-9_]") then
+    prefix = line:sub(i)
+    if prefix == "" or prefix:find("[^a-zA-Z0-9_]") then
       break
     end
   end
   local service = LanguageService:get { type = 'lsp' }
+
+  -- Pause sending textDocument/didChange as neovim spams them during completion
   service:pause_did_change(buf)
   local unregister
   unregister = vim.autocommand.register {
@@ -160,7 +199,8 @@ local function complete_start()
       service:resume_did_change(buf)
     end
   }
-  _completion = call_completion(pos)
+
+  _completion = call_completion(pos, prefix)
   return coln == 1 and 0 or coln
 end
 
