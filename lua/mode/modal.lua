@@ -9,22 +9,23 @@ function Modal:open(o)
   assert(o.lines ~= nil)
   local lines = util.table.from_iterator(o.lines)
 
-  local width = vim.Window:current().options.width
+  local width = vim.ui.options.columns
   local height = math.max(math.min(o.size or 8, #lines + 2))
 
   local row = 1
 
   local content = {}
   do
+    local ch = '─'
     local top
     if o.title then
-      local left = string.rep("━", width - #o.title - 2 - 1)
-      local right = "━"
+      local right = string.rep(ch, 1)
+      local left = string.rep(ch, width - #o.title - 1)
       top = left .. o.title .. right
     else
-      top = string.rep("━", width - 2)
+      top = string.rep(ch, width)
     end
-    local bottom = string.rep("━", width - 2)
+    local bottom = string.rep(ch, width)
     table.insert(content, top)
     for i = 1, height - 2 do
       table.insert(content, lines[i] or '')
@@ -71,6 +72,7 @@ function Modal:open(o)
   win.options.winhighlight = 'Normal:MyHighlight'
   win.options.wrap = false
   win.options.cursorline = false
+  win.options.signcolumn = 'no'
 
   self.current = {win = win, content = content}
 end
@@ -85,6 +87,7 @@ end
 vim.autocommand.register {
   event = {
     vim.autocommand.InsertEnter,
+    vim.autocommand.CmdlineEnter,
   },
   pattern = '*',
   action = function()
