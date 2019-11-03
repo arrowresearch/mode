@@ -13,12 +13,27 @@ local async = require 'mode.async'
 local function sleep(delay)
   local resp = async.Future:new()
   local timer = uv.new_timer()
-  uv.timer_start(timer, delay, 0, function ()
+  local function cleanup()
     uv.timer_stop(timer)
-    uv.close(timer)
-    resp:put()
+    if not uv.is_closing(timer) then
+      uv.close(timer)
+    end
+  end
+  local function cancel()
+    if timer ~= nil then
+      cleanup()
+      timer = nil
+      resp:put(false)
+    end
+  end
+  uv.timer_start(timer, delay, 0, function ()
+    if timer ~= nil then
+      cleanup()
+      timer = nil
+      resp:put(true)
+    end
   end)
-  return resp
+  return resp, cancel
 end
 
 -- Stream
