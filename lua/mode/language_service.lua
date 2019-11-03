@@ -10,7 +10,7 @@ local vim = require 'mode.vim'
 local log = logging.get_logger('language_service')
 
 local function toarray(value)
-  if util.table_is_array(value) then
+  if util.table.is_array(value) then
     return value
   else
     return {value}

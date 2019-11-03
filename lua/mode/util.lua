@@ -70,10 +70,6 @@ local function table_pack(...)
   return t
 end
 
-local function table_is_array(t)
-  return type(t) == 'table' and (#t > 0 or next(t) == nil)
-end
-
 local function array_copy(t)
   local copy = {}
   for i, v in ipairs(t) do
@@ -154,6 +150,26 @@ function _table.concat(t, sep)
   return res
 end
 
+function _table.map(t, f)
+  local res = {}
+  for _, v in ipairs(t) do
+    table.insert(res, f(v))
+  end
+  return res
+end
+
+function _table.mapi(t, f)
+  local res = {}
+  for i, v in ipairs(t) do
+    table.insert(res, f(v, i))
+  end
+  return res
+end
+
+function _table.is_array(t)
+  return type(t) == 'table' and (#t > 0 or next(t) == nil)
+end
+
 return {
   string = _string,
   table = _table,
@@ -162,7 +178,6 @@ return {
   Object = Object,
   LinkedList = LinkedList,
   table_pack = table_pack,
-  table_is_array = table_is_array,
   array_copy = array_copy,
   errorf = errorf,
   error = error,

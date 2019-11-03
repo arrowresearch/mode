@@ -90,17 +90,15 @@ local function hover()
 
     if not resp.result then
       vim.echo("mode: <no response>")
+      return
     end
 
     local message
     do
       local contents = resp.result.contents
-      if util.table_is_array(contents) then
-        local parts = {}
-        for _, item in ipairs(contents) do
-          table.insert(parts, item.value)
-        end
-        message = table.concat(parts, '\n')
+      if util.table.is_array(contents) then
+        message = util.table.map(contents, function(item) return item.value end)
+        message = util.table.concat(message, '\n')
       else
         message = contents.value
       end
