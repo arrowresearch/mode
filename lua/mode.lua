@@ -168,6 +168,7 @@ local function call_completion(pos, prefix)
       table.insert(items, {word = word, menu = kind})
     end
   end
+  vim.show {prefix, items}
   return items
 end
 
@@ -178,13 +179,14 @@ local function complete_start()
   local line = lines[1]:sub(1, pos.position.character)
   -- Look back till we find non-alphanumeric chars
   local coln
-  local prefix
+  local prefix = nil
   for i = #line, 1, -1 do
     coln = i
-    prefix = line:sub(i)
-    if prefix == "" or prefix:find("[^a-zA-Z0-9_]") then
+    local chunk = line:sub(i)
+    if chunk == "" or chunk:find("[^a-zA-Z0-9_]") then
       break
     end
+    prefix = chunk
   end
   local service = LanguageService:get { type = 'lsp' }
 
