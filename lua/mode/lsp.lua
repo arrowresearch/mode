@@ -35,12 +35,10 @@ function TextDocumentPosition.__eq(a, b)
 end
 
 function TextDocumentPosition:current()
-  local position = Position:current()
-  local filename = vim.Buffer:current():filename()
-  local uri = uri_of_path(filename)
+  local buf = vim.Buffer:current()
   return self:new {
-    uri = uri,
-    position = position,
+    uri = uri_of_path(buf:filename()),
+    position = Position:current(),
   }
 end
 
@@ -58,7 +56,6 @@ function LSPClient:init(o)
   self.is_insert_mode = false
   self.is_utf8 = nil
 
-  self.buffers_pause_did_change = {}
   self.on_shutdown = async.Channel:new()
 
   self.capabilities = {
@@ -121,10 +118,17 @@ function LSPClient:did_open(buffer)
       buffer = buffer,
       is_utf8 = self.is_utf8,
     }
+    self.buffers[buffer.id] = {
+      watcher = watcher,
+      buffer = buffer,
+      changedtick = buffer:changedtick(),
+      content_changes = {},
+      content_changes_paused = false,
+      content_changes_cancel_timer = nil,
+    }
     watcher.updates:subscribe(function(change)
       self:did_change(change)
     end)
-    self.buffers[buffer.id] = { watcher = watcher, buffer = buffer }
   end)
 end
 
@@ -140,45 +144,92 @@ function LSPClient:did_close(buffer)
 end
 
 function LSPClient:did_change(change)
-  if self.buffers_pause_did_change[change.buffer.id] then
+  local buf = change.buffer
+  local info = self.buffers[buf.id]
+  if not info or info.content_changes_paused then
     return
   end
   self.initialized:wait()
-  local lines = change.buffer:contents_lines(change.start, change.stopped)
+  local lines = buf:contents_lines(change.start, change.stopped)
   local text = table.concat(lines, "\n") .. ((change.stopped > change.start) and "\n" or "")
   local length = (self.is_utf8 and change.bytes) or change.units
+  local content_change = {
+    range = {
+      start = {
+        line = change.start,
+        character = 0
+      },
+      ["end"] = {
+        line = change.stop,
+        character = 0
+      }
+    },
+    text = text,
+    rangeLength = length
+  }
+  table.insert(self.buffers[buf.id].content_changes, content_change)
+  self:schedule_flush_did_change(buf)
+end
+
+function LSPClient:schedule_flush_did_change(buf)
+  local info = self.buffers[buf.id]
+  if info.content_changes_cancel_timer ~= nil then
+    info.content_changes_cancel_timer()
+    info.content_changes_cancel_timer = nil
+  end
+  local delay, cancel = uv.sleep(700)
+  info.content_changes_cancel_timer = cancel
+  async.task(function()
+    local ok = delay:wait()
+    info.content_changes_cancel_timer = nil
+    if ok then
+      vim.wait()
+      self:flush_did_change(buf)
+    end
+  end)
+end
+
+function LSPClient:force_flush_did_change(buf)
+  local info = self.buffers[buf.id]
+  if info.content_changes_cancel_timer ~= nil then
+    info.content_changes_cancel_timer()
+    info.content_changes_cancel_timer = nil
+    self:flush_did_change(buf)
+  end
+end
+
+function LSPClient:flush_did_change(buf)
+  if not buf:exists() then
+    return
+  end
+  local info = self.buffers[buf.id]
+  local content_changes = info.content_changes
+  if #content_changes == 0 then
+    return
+  end
+  info.content_changes = {}
   self.jsonrpc:notify("textDocument/didChange", {
     textDocument = {
-      uri = uri_of_path(change.buffer:filename()),
-      version = change.tick
+      uri = uri_of_path(buf:filename()),
+      version = info.changedtick,
     },
-    contentChanges = {
-      {
-        range = {
-          start = {
-            line = change.start,
-            character = 0
-          },
-          ["end"] = {
-            line = change.stop,
-            character = 0
-          }
-        },
-        text = text,
-        rangeLength = length
-      }
-    }
+    contentChanges = content_changes,
   })
 end
 
 function LSPClient:pause_did_change(buf)
-  self.buffers_pause_did_change[buf.id] = true
+  local info = self.buffers[buf.id]
+  if info then
+    info.content_changes_paused = true
+  end
 end
 
 function LSPClient:resume_did_change(buf)
-  if not self.buffers_pause_did_change[buf.id] then
+  local info = self.buffers[buf.id]
+  if not info or not info.content_changes_paused then
     return
   end
+  info.content_changes_paused = false
   -- Send whole doc update
   local lines = buf:contents_lines()
   local text = table.concat(lines, "\n") .. "\n"
@@ -193,7 +244,6 @@ function LSPClient:resume_did_change(buf)
       }
     }
   })
-  self.buffers_pause_did_change[buf.id] = false
 end
 
 function LSPClient:did_insert_enter(_)

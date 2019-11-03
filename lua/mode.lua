@@ -23,6 +23,8 @@ local function definition()
     end
 
     local params = lsp.TextDocumentPosition:current()
+    local buf = vim.Buffer:current()
+    service:force_flush_did_change(buf)
     local resp = service.jsonrpc:request("textDocument/definition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -51,6 +53,8 @@ local function type_definition()
     end
 
     local params = lsp.TextDocumentPosition:current()
+    local buf = vim.Buffer:current()
+    service:force_flush_did_change(buf)
     local resp = service.jsonrpc:request("textDocument/typeDefinition", params):wait()
     if not resp.result or #resp.result == 0 then
       return
@@ -71,6 +75,7 @@ local function type_definition()
 end
 
 local function hover()
+  local buf = vim.Buffer:current()
   local pos = lsp.TextDocumentPosition:current()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
@@ -79,6 +84,7 @@ local function hover()
       return
     end
 
+    service:force_flush_did_change(buf)
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
     do
@@ -189,6 +195,7 @@ local function complete_start()
   end
   local service = LanguageService:get { type = 'lsp' }
 
+  service:force_flush_did_change(buf)
   -- Pause sending textDocument/didChange as neovim spams them during completion
   service:pause_did_change(buf)
   local unregister

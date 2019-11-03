@@ -31,11 +31,24 @@ function Linter:start(o)
   return self:new(o)
 end
 
-function Linter:schedule_run(buffer)
+function Linter:schedule_run(buf)
+  local info = self._buffers[buf.id]
+  if not info then
+    return
+  end
+  if info.cancel_run ~= nil then
+    info.cancel_run()
+  end
+
+  local delay, cancel = uv.sleep(Linter.debounce)
+  info.cancel_run = cancel
+
   self.on_schedule_run:put()
   async.task(function()
-    uv.sleep(Linter.debounce):wait()
-    self:run(buffer)
+    local ok = delay:wait()
+    if ok then
+      self:run(buf)
+    end
   end)
 end
 
@@ -143,6 +156,7 @@ function Linter:did_open(buffer)
     local info = {
       tick = -1,
       tick_queued = 0,
+      cancel_run = nil,
       buffer = buffer,
       watcher = watcher,
       stop_updates = watcher.updates:subscribe(function(change)
