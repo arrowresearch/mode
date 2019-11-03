@@ -168,7 +168,6 @@ local function call_completion(pos, prefix)
       table.insert(items, {word = word, menu = kind})
     end
   end
-  vim.show {prefix, items}
   return items
 end
 
