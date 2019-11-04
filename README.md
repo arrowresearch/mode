@@ -22,12 +22,47 @@ mode is a plugin for [neovim][] which attempts to do the following:
 
 - mode is an experiment with new neovim features
 
-## Installation
+## Installation & Usage
 
 Put the following lines into `~/.config/nvim/init.vim` (assuming [vim-plug][]):
 
 ```
 Plug 'arrowresearch/mode'
+```
+
+### Keybindings
+
+The following keybindings are recommended (though you might want to make them
+buffer local for those buffers which you want enable mode for):
+
+```
+nmap <silent> t  <Cmd>ModeHover<CR>
+nmap <silent> gd <Cmd>ModeDefinition<CR>
+nmap <silent> gt <Cmd>ModeTypeDefinition<CR>
+nmap <silent> mm <Cmd>ModeNextLocation<CR>
+nmap <silent> mp <Cmd>ModePrevLocation<CR>
+set omnifunc=ModeOmni
+```
+
+### Integration with `statusline`
+
+There's `diagnostics_count()` function which returns current counts of errors
+and warnings for the buffer, one can make use of it to inject the info into
+`statusline`:
+
+```
+function! ModeWarnings() abort
+  let l:counts = luaeval("require('mode').diagnostics_count().warnings")
+  return l:counts == 0 ? '' : printf('WARN:%d', l:counts)
+endfunction
+
+function! ModeErrors() abort
+  let l:counts = luaeval("require('mode').diagnostics_count().errors")
+  return l:counts == 0 ? '' : printf('ERR:%d', l:counts)
+endfunction
+
+set statusline+=\%#StatusLineError#%{ModeErrors()}
+set statusline+=\%#StatusLineWarning#%{ModeWarnings()}
 ```
 
 ## Thank you
