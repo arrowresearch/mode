@@ -14,6 +14,16 @@ local function report_error(msg, ...)
   print("ERROR: " .. msg)
 end
 
+local function jump(lnum, col)
+  vim.execute([[normal! %iG%i|]], lnum, col)
+  vim.execute([[normal! zz]])
+end
+
+local function jump_other(filename, lnum, col)
+  vim.execute([[edit +%i %s]], lnum, filename.string)
+  vim.execute([[normal! zz]])
+end
+
 local function definition()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
@@ -34,13 +44,15 @@ local function definition()
     local uri = pos.uri
     local filename = lsp.uri_to_path(pos.uri)
 
-    if uri ~= params.textDocument.uri then
-      vim.execute([[edit %s]], filename.string)
-    end
-
     local lnum = pos.range.start.line + 1
     local col = pos.range.start.character + 1
-    vim.call.cursor(lnum, col)
+
+    if uri ~= params.textDocument.uri then
+      jump_other(filename, lnum, col)
+    else
+      jump(lnum, col)
+    end
+
   end)
 end
 
@@ -64,13 +76,13 @@ local function type_definition()
     local uri = pos.uri
     local filename = lsp.uri_to_path(pos.uri)
 
-    if uri ~= params.textDocument.uri then
-      vim.execute([[edit %s]], filename.string)
-    end
-
     local lnum = pos.range.start.line + 1
     local col = pos.range.start.character + 1
-    vim.call.cursor(lnum, col)
+    if uri ~= params.textDocument.uri then
+      jump_other(filename, lnum, col)
+    else
+      jump(lnum, col)
+    end
   end)
 end
 
@@ -238,7 +250,7 @@ local function prev_diagnostic_location(o)
     found = items[#items].range.start
   end
   if found then
-    vim.call.cursor(found.line + 1, found.character + 1)
+    jump(found.line + 1, found.character + 1)
   end
 end
 
@@ -262,7 +274,7 @@ local function next_diagnostic_location(o)
     found = items[1].range.start
   end
   if found then
-    vim.call.cursor(found.line + 1, found.character + 1)
+    jump(found.line + 1, found.character + 1)
   end
 end
 

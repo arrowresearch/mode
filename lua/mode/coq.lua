@@ -334,6 +334,7 @@ function Coq:prev(o)
   self:set_tip(tip.parent, nil)
   if o and o.jump and tip then
     local pos = byte2position(tip.sentence.ep)
+    -- TODO: fix this as this doesn't update jumplist
     vim.call.cursor(pos.lnum, pos.coln)
   end
 end
@@ -445,6 +446,7 @@ function Coq:_add(tip, body, o)
   self:set_tip(next_tip, error)
   if o and o.jump and next_tip then
     local pos = byte2position(next_tip.sentence.ep)
+    -- TODO: fix this as this doesn't update jumplist
     vim.call.cursor(pos.lnum, pos.coln)
   end
 end
