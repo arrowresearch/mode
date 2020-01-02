@@ -86,6 +86,29 @@ local function type_definition()
   end)
 end
 
+local current_hover = {state = 'init'}
+local hover_buffer = nil
+
+local function get_hover_buffer()
+  if hover_buffer == nil then
+    hover_buffer = vim.Buffer:create { scratch = true; listed = false; }
+    hover_buffer.options.modifiable = false
+    hover_buffer.options.filetype = 'mode-hover'
+    hover_buffer:set_name('MODE-HOVER')
+
+    vim.autocommand.register {
+      event = {
+        vim.autocommand.BufLeave,
+      },
+      pattern = 'MODE-HOVER',
+      action = function(_)
+        vim.execute [[bdelete!]]
+      end
+    }
+  end
+  return hover_buffer
+end
+
 local function hover()
   local buf = vim.Buffer:current()
   local pos = lsp.TextDocumentPosition:current()
@@ -96,12 +119,38 @@ local function hover()
       return
     end
 
+    do
+      if current_hover.state == 'done' and current_hover.pos == pos then
+        vim.execute [[split]]
+        local buf = get_hover_buffer()
+        hover_buffer.options.modifiable = true
+        vim.show(current_hover.lines)
+        buf:set_lines(current_hover.lines)
+        hover_buffer.options.modifiable = false
+        local win = vim.Window:current()
+        win:set_buffer(buf)
+        return
+      end
+    end
+
+    -- cancel if another request for the same position is in flight
+    do
+      if current_hover.state == 'in-progress' and current_hover.pos == pos then
+        return
+      end
+      current_hover = {
+        state = 'in-progress',
+        pos = pos,
+      }
+    end
+
     service:force_flush_did_change(buf)
     local resp = service.jsonrpc:request("textDocument/hover", pos):wait()
 
+    -- check if we are still at the same pos
     do
       local next_pos = lsp.TextDocumentPosition:current()
-      if next_pos ~= pos then
+      if not (current_hover.state == 'in-progress' and current_hover.pos == next_pos) then
         return
       end
     end
@@ -122,9 +171,14 @@ local function hover()
       end
     end
 
+    current_hover = {
+      state = 'done',
+      pos = pos,
+      lines = util.string.lines(message),
+    }
     Modal:open {
       title = "[INFO]",
-      lines = util.string.lines(message),
+      lines = util.table.from_iterator(util.string.lines(message)),
     }
   end)
 end

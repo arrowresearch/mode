@@ -155,6 +155,10 @@ function Window:buffer()
   return Buffer:new(vim.api.nvim_win_get_buf(self.id))
 end
 
+function Window:set_buffer(buf)
+  vim.api.nvim_win_set_buf(self.id, buf.id)
+end
+
 function Window:close(o)
   o = o or {force = false}
   vim.api.nvim_win_close(self.id, o.force)
