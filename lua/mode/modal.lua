@@ -74,12 +74,19 @@ function Modal:open(o)
   win.options.cursorline = false
   win.options.signcolumn = 'no'
 
-  self.current = {win = win, content = content}
+  self.current = {
+    win = win,
+    content = content,
+    on_close = o.on_close,
+  }
 end
 
 function Modal:close()
   if self.current ~= nil then
     self.current.win:close { force = true }
+    if self.current.on_close ~= nil then
+      self.current.on_close()
+    end
     self.current = nil
   end
 end

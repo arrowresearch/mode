@@ -179,6 +179,9 @@ local function hover()
     Modal:open {
       title = "[INFO]",
       lines = util.table.from_iterator(util.string.lines(message)),
+      on_close = function()
+        current_hover = {state = 'init'}
+      end
     }
   end)
 end
