@@ -24,6 +24,23 @@ local function jump_other(filename, lnum, col)
   vim.execute([[normal! zz]])
 end
 
+local function get_first_location(result)
+  local loc
+  if util.table.is_array(result) then
+    loc = result[1]
+  else
+    loc = result
+  end
+  -- Coerce LocationLink to Location
+  if loc ~= nil and loc.targetUri ~= nil and loc.targetRange ~= nil then
+    loc = {
+      uri = loc.targetUri,
+      range = loc.targetRange,
+    }
+  end
+  return loc
+end
+
 local function definition()
   async.task(function()
     local service = LanguageService:get { type = 'lsp' }
@@ -36,16 +53,16 @@ local function definition()
     local buf = vim.Buffer:current()
     service:force_flush_did_change(buf)
     local resp = service.jsonrpc:request("textDocument/definition", params):wait()
-    if not resp.result or #resp.result == 0 then
+    local loc = get_first_location(resp.result)
+    if loc == nil then
       return
     end
 
-    local pos = resp.result[1]
-    local uri = pos.uri
-    local filename = lsp.uri_to_path(pos.uri)
+    local uri = loc.uri
+    local filename = lsp.uri_to_path(loc.uri)
 
-    local lnum = pos.range.start.line + 1
-    local col = pos.range.start.character + 1
+    local lnum = loc.range.start.line + 1
+    local col = loc.range.start.character + 1
 
     if uri ~= params.textDocument.uri then
       jump_other(filename, lnum, col)
@@ -72,12 +89,16 @@ local function type_definition()
       return
     end
 
-    local pos = resp.result[1]
-    local uri = pos.uri
-    local filename = lsp.uri_to_path(pos.uri)
+    local loc = get_first_location(resp.result)
+    if loc == nil then
+      return
+    end
 
-    local lnum = pos.range.start.line + 1
-    local col = pos.range.start.character + 1
+    local uri = loc.uri
+    local filename = lsp.uri_to_path(loc.uri)
+
+    local lnum = loc.range.start.line + 1
+    local col = loc.range.start.character + 1
     if uri ~= params.textDocument.uri then
       jump_other(filename, lnum, col)
     else
