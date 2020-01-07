@@ -20,6 +20,8 @@ end
 
 function JSONRPCClient:start()
   local buf = ""
+  local headers = {}
+  local ready = false
 
   local function on_stdout(chunk)
     if not chunk then
@@ -31,15 +33,32 @@ function JSONRPCClient:start()
       return
     end
     local line = string.sub(buf, 1, eol - 1)
-    local space = string.find(line, " ")
-    local length = tonumber(string.sub(line,space+1))
-    -- TODO: can has Content-Type??
-    if string.len(buf) >= eol + 3 + length then
-      local msg = buf:sub(eol+2,eol+3+length)
-      buf = buf:sub(eol+3+length+1)
-      vim.schedule(function () self:on_message(msg) end)
-      -- check again, very tailcall
+
+    if not ready and line == "" then
+      ready = true
+    end
+
+    if not ready then
+      local colon = string.find(line, ":")
+      assert(colon ~= nil)
+      local name = util.string.trim(line:sub(1, colon-1):lower())
+      local value = util.string.trim(line:sub(colon+1))
+      headers[name] = value
+      buf = buf:sub(eol + 2)
       return on_stdout('')
+    else
+      local length = headers['content-length']
+      assert(length ~= nil)
+      length = tonumber(length)
+      if string.len(buf) >= eol + 1 + length then
+        local msg = buf:sub(eol + 2, eol + 1 + length)
+        buf = buf:sub(eol+3+length+1)
+        headers = {}
+        ready = false
+        vim.schedule(function () self:on_message(msg) end)
+        -- check again, very tailcall
+        return on_stdout('')
+      end
     end
   end
 

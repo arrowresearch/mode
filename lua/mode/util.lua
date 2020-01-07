@@ -89,7 +89,11 @@ end
 local _string = {}
 
 function _string.starts_with(v, prefix)
-   return v:sub(1, #prefix) == prefix
+  return v:sub(1, #prefix) == prefix
+end
+
+function _string.trim(v)
+  return v:gsub("^%s*(.-)%s*$", "%1")
 end
 
 function _string.lines(v, start, stop)
