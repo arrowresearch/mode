@@ -20,44 +20,57 @@ end
 
 function JSONRPCClient:start()
   local buf = ""
-  local headers = {}
-  local ready = false
+  local waiting_len = nil
+
+  local function parse_headers(data)
+    vim.schedule(function ()
+      print('headers:')
+    end)
+    local headers = {}
+    for line in string.gmatch(data, "[^\r\n]+") do
+    vim.schedule(function ()
+      print(line)
+    end)
+      local colon = string.find(line, ":")
+      if colon ~= nil then
+        local name = util.string.trim(line:sub(1, colon - 1):lower())
+        local value = util.string.trim(line:sub(colon + 1))
+        headers[name] = value
+      end
+    end
+    vim.schedule(function ()
+      print('headers:')
+      print(vim.inspect(headers))
+    end)
+    local len = headers['content-length']
+    assert(len, 'Missing `Content-Length` header')
+    return headers, tonumber(len)
+  end
 
   local function on_stdout(chunk)
     if not chunk then
       return
     end
     buf = buf .. chunk
-    local eol = string.find(buf, '\r\n')
-    if not eol then
-      return
-    end
-    local line = string.sub(buf, 1, eol - 1)
 
-    if not ready and line == "" then
-      ready = true
-    end
+    if waiting_len == nil then
+      -- wait for \r\n\r\n which separates headers and body
+      local start, finish = string.find(buf, '\r\n\r\n')
+      if not start then
+        return
+      end
 
-    if not ready then
-      local colon = string.find(line, ":")
-      assert(colon ~= nil)
-      local name = util.string.trim(line:sub(1, colon-1):lower())
-      local value = util.string.trim(line:sub(colon+1))
-      headers[name] = value
-      buf = buf:sub(eol + 2)
+      local _, len = parse_headers(string.sub(buf, 1, start + 1))
+      buf = string.sub(buf, finish + 1)
+      waiting_len = len
       return on_stdout('')
     else
-      local length = headers['content-length']
-      assert(length ~= nil)
-      length = tonumber(length)
-      if string.len(buf) >= eol + 1 + length then
-        local msg = buf:sub(eol + 2, eol + 1 + length)
-        buf = buf:sub(eol+3+length+1)
-        headers = {}
-        ready = false
+      if string.len(buf) >= waiting_len then
+        local msg = string.sub(buf, 1, waiting_len)
+        buf = string.sub(buf, waiting_len + 1)
+        waiting_len = nil
         vim.schedule(function () self:on_message(msg) end)
-        -- check again, very tailcall
-        return on_stdout('')
+        return on_stdout('') -- check again
       end
     end
   end
