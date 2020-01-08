@@ -23,14 +23,8 @@ function JSONRPCClient:start()
   local waiting_len = nil
 
   local function parse_headers(data)
-    vim.schedule(function ()
-      print('headers:')
-    end)
     local headers = {}
     for line in string.gmatch(data, "[^\r\n]+") do
-    vim.schedule(function ()
-      print(line)
-    end)
       local colon = string.find(line, ":")
       if colon ~= nil then
         local name = util.string.trim(line:sub(1, colon - 1):lower())
@@ -38,10 +32,6 @@ function JSONRPCClient:start()
         headers[name] = value
       end
     end
-    vim.schedule(function ()
-      print('headers:')
-      print(vim.inspect(headers))
-    end)
     local len = headers['content-length']
     assert(len, 'Missing `Content-Length` header')
     return headers, tonumber(len)
